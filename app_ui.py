@@ -43,7 +43,7 @@ except ImportError:
 try:
     from version import APP_VERSION
 except ImportError:
-    APP_VERSION = "1.0.6"
+    APP_VERSION = "1.0.6.1"
 
 __all__ = ["VPNApplication"]
 
@@ -279,10 +279,75 @@ _COUNTRY_FLAGS = (
 )
 
 
+_SERVER_MAP_CACHE: dict[str, str] = {}
+
+def _load_server_map() -> dict[str, str]:
+    global _SERVER_MAP_CACHE
+    if _SERVER_MAP_CACHE:
+        return _SERVER_MAP_CACHE
+    for candidate in [
+        Path.home() / ".config" / "wavez-vpn" / "wavez_servers.json",
+        Path("/usr/local/share/wavez-vpn/wavez_servers.json"),
+        Path(__file__).resolve().parent / "wavez_servers.json",
+        Path(__file__).resolve().parent.parent / "wavez_servers.json",
+    ]:
+        if candidate.is_file():
+            try:
+                data = json.loads(candidate.read_text(encoding="utf-8"))
+                for s in data.get("servers", []):
+                    ascii_n = s.get("ascii_name") or s.get("id")
+                    if ascii_n and s.get("name"):
+                        _SERVER_MAP_CACHE[ascii_n] = s.get("name")
+                    if s.get("name"):
+                        _SERVER_MAP_CACHE[s.get("name")] = s.get("name")
+                if _SERVER_MAP_CACHE:
+                    break
+            except Exception:
+                pass
+    return _SERVER_MAP_CACHE
+
+def get_server_display_title(profile_name: str) -> str:
+    """Return full friendly display title with country flag for any profile."""
+    if not profile_name:
+        return "Не выбран"
+    s_map = _load_server_map()
+    if profile_name in s_map:
+        return s_map[profile_name]
+
+    prof_file = Path.home() / ".config" / "wavez-vpn" / "profiles" / f"{profile_name}.conf"
+    if prof_file.is_file():
+        try:
+            for line in prof_file.read_text(encoding="utf-8", errors="ignore").splitlines()[:8]:
+                if line.startswith("# Incy Profile:"):
+                    title = line.split(":", 1)[1].strip()
+                    s_map[profile_name] = title
+                    return title
+        except Exception:
+            pass
+
+    flag = get_server_flag(profile_name)
+    return f"{flag}  {profile_name}"
+
 def get_server_flag(name: str) -> str:
-    """Return national flag emoji for a given server name."""
+    """Return national flag emoji for a given server name or code."""
     if not name:
         return "🌐"
+
+    parts = name.strip().split()
+    if parts:
+        first = parts[0]
+        if len(first) <= 8 and any(ord(c) > 0x1F000 for c in first):
+            return first
+
+    s_map = _load_server_map()
+    if name in s_map:
+        full_title = s_map[name]
+        parts = full_title.strip().split()
+        if parts:
+            first = parts[0]
+            if len(first) <= 8 and any(ord(c) > 0x1F000 for c in first):
+                return first
+
     lower = name.lower()
     for key, flag in _COUNTRY_FLAGS:
         if key in lower:
@@ -497,7 +562,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.6)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.6.1)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -614,7 +679,7 @@ class MainWindow(Adw.ApplicationWindow):
         title_box.append(app_title_lbl)
 
         app_ver_lbl = Gtk.Label()
-        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.6</span>")
+        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.6.1</span>")
         title_box.append(app_ver_lbl)
 
         # ── Mascot Image (SPIZDILI_VPN raccoon logo) ────────────────────
@@ -1354,8 +1419,8 @@ class MainWindow(Adw.ApplicationWindow):
             idx = self._profile_names.index(profile_name)
             self._profile_dropdown_row.set_selected(idx)
             self.cfg.set_last_connected(profile_name)
-            flag = get_server_flag(profile_name)
-            self._show_toast(f"⚡ Самый быстрый: {flag} {profile_name} ({int(latency)} ms) — подключаем!", timeout=4)
+            display_title = get_server_display_title(profile_name)
+            self._show_toast(f"⚡ Самый быстрый: {display_title} ({int(latency)} ms) — подключаем!", timeout=4)
             self._do_connect(profile_name)
 
     def _on_import_incy_servers_clicked(self, button: Gtk.Button) -> None:
@@ -1424,7 +1489,7 @@ class MainWindow(Adw.ApplicationWindow):
         """Reload profiles from disk and update UI."""
         profiles = self.cfg.list_profiles()
         self._profile_names = [p.name for p in profiles]
-        display_names = [f"{get_server_flag(p.name)}  {p.name}" for p in profiles]
+        display_names = [get_server_display_title(p.name) for p in profiles]
 
         # Update dropdown model
         self._profile_model.splice(0, self._profile_model.get_n_items(), display_names)
@@ -1465,8 +1530,9 @@ class MainWindow(Adw.ApplicationWindow):
         self._profiles_listbox.set_visible(True)
 
         for cfg in profiles:
-            flag = get_server_flag(cfg.name)
-            row = Adw.ActionRow(title=f"{flag}  {cfg.name}")
+            display_title = get_server_display_title(cfg.name)
+            flag = get_server_flag(display_title)
+            row = Adw.ActionRow(title=display_title)
             row.set_icon_name("network-vpn-symbolic")
             row.set_activatable(True)
             row.connect("activated", lambda r, n=cfg.name: self._on_profile_row_activated(n))
@@ -1809,19 +1875,19 @@ class MainWindow(Adw.ApplicationWindow):
             name = self._profile_names[selected]
             self.cfg.set_last_connected(name)
             if not self._connected:
-                flag = get_server_flag(name)
-                self._status_subtitle.set_text(f"Выбран: {flag} {name}")
+                display_title = get_server_display_title(name)
+                self._status_subtitle.set_text(f"Выбран: {display_title}")
 
     def _on_profile_row_activated(self, profile_name: str) -> None:
         if hasattr(self, "_profile_names") and profile_name in self._profile_names:
             idx = self._profile_names.index(profile_name)
             self._profile_dropdown_row.set_selected(idx)
             self.cfg.set_last_connected(profile_name)
-            flag = get_server_flag(profile_name)
+            display_title = get_server_display_title(profile_name)
             if not self._connected:
-                self._status_subtitle.set_text(f"Выбран: {flag} {profile_name}")
+                self._status_subtitle.set_text(f"Выбран: {display_title}")
             self._stack.set_visible_child_name("connection")
-            self._show_toast(f"Выбран сервер: {flag} {profile_name}")
+            self._show_toast(f"Выбран сервер: {display_title}")
 
     def _on_profile_quick_connect(self, profile_name: str) -> None:
         if hasattr(self, "_profile_names") and profile_name in self._profile_names:
@@ -1965,8 +2031,8 @@ class MainWindow(Adw.ApplicationWindow):
             self._status_icon.remove_css_class("vpn-error")
             self._status_icon.add_css_class("vpn-connected")
             self._status_label.set_text("Подключено")
-            flag = get_server_flag(self._active_profile or "")
-            self._status_subtitle.set_text(f"{flag}  {self._active_profile or ''}")
+            display_title = get_server_display_title(self._active_profile or "")
+            self._status_subtitle.set_text(display_title)
             self._connect_btn.set_visible(True)
             self._connect_btn.set_label("Сменить сервер")
             self._connect_btn.remove_css_class("suggested-action")

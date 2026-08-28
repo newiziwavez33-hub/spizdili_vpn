@@ -48,7 +48,7 @@ def build() -> None:
     if exe_path.is_file():
         size_mb = exe_path.stat().st_size / (1024 * 1024)
         print(f"✓ Standalone single-file executable built: {exe_path} ({size_mb:.1f} MB)")
-        zip_path = DIST_DIR / "SPIZDILI_VPN_v1.0.6_Windows_x64.zip"
+        zip_path = DIST_DIR / "SPIZDILI_VPN_v1.0.6.1_Windows_x64.zip"
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
             z.write(exe_path, arcname="SPIZDILI_VPN.exe")
         print(f"✓ Created portable zip archive: {zip_path}")

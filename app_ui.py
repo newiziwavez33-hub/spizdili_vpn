@@ -771,6 +771,13 @@ class MainWindow(Adw.ApplicationWindow):
         import_btn.connect("clicked", self._on_import_clicked)
         header_box.append(import_btn)
 
+        # Fetch open community Reality servers button
+        self._cloud_fetch_btn = Gtk.Button.new_from_icon_name("software-update-available-symbolic")
+        self._cloud_fetch_btn.set_tooltip_text("Загрузить свежие серверы VLESS Reality из сети")
+        self._cloud_fetch_btn.add_css_class("flat")
+        self._cloud_fetch_btn.connect("clicked", self._on_fetch_cloud_servers_clicked)
+        header_box.append(self._cloud_fetch_btn)
+
         self._profiles_group.set_header_suffix(header_box)
 
         # Interactive Search Entry for instant real-time filtering
@@ -1012,6 +1019,18 @@ class MainWindow(Adw.ApplicationWindow):
             description="Управление каталогом серверов и сброс параметров",
         )
 
+        fetch_cloud_row = Adw.ActionRow(
+            title="Загрузка серверов из открытых баз (VLESS Reality)",
+            subtitle="Автоматически протестировать и добавить быстрые бесплатные серверы",
+        )
+        self._fetch_cloud_btn = Gtk.Button(label="Загрузить из сети")
+        self._fetch_cloud_btn.add_css_class("suggested-action")
+        self._fetch_cloud_btn.add_css_class("pill")
+        self._fetch_cloud_btn.set_valign(Gtk.Align.CENTER)
+        self._fetch_cloud_btn.connect("clicked", self._on_fetch_cloud_servers_clicked)
+        fetch_cloud_row.add_suffix(self._fetch_cloud_btn)
+        catalog_group.add(fetch_cloud_row)
+
         import_incy_row = Adw.ActionRow(
             title="Импорт каталога серверов",
             subtitle="Загрузить все 37 серверов Reality в список профилей",
@@ -1065,6 +1084,44 @@ class MainWindow(Adw.ApplicationWindow):
         upd_group.add(auto_row)
 
         inner.append(upd_group)
+
+    # ── Open Reality Community Feed Fetcher ──────────────────────────────
+
+    def _on_fetch_cloud_servers_clicked(self, _btn=None) -> None:
+        self._show_toast("Поиск и замер задержки открытых серверов Reality…", timeout=5)
+        if hasattr(self, "_cloud_fetch_btn"):
+            self._cloud_fetch_btn.set_sensitive(False)
+        if hasattr(self, "_fetch_cloud_btn"):
+            self._fetch_cloud_btn.set_sensitive(False)
+            self._fetch_cloud_btn.set_label("Поиск…")
+
+        def _task():
+            try:
+                import reality_fetcher
+                servers = reality_fetcher.fetch_and_test_reality_servers(
+                    max_servers=25,
+                    progress_cb=lambda msg: GLib.idle_add(self._show_toast, msg, 3)
+                )
+                count = reality_fetcher.save_servers_to_system(servers)
+                GLib.idle_add(self._on_fetch_cloud_servers_done, count, "")
+            except Exception as exc:
+                GLib.idle_add(self._on_fetch_cloud_servers_done, 0, str(exc))
+
+        import threading as _th
+        _th.Thread(target=_task, daemon=True).start()
+
+    def _on_fetch_cloud_servers_done(self, count: int, err: str) -> None:
+        if hasattr(self, "_cloud_fetch_btn"):
+            self._cloud_fetch_btn.set_sensitive(True)
+        if hasattr(self, "_fetch_cloud_btn"):
+            self._fetch_cloud_btn.set_sensitive(True)
+            self._fetch_cloud_btn.set_label("Загрузить из сети")
+
+        if count > 0:
+            self._refresh_profiles()
+            self._show_toast(f"✓ Добавлено {count} быстрых серверов Reality!")
+        else:
+            self._show_toast(f"Ошибка загрузки серверов: {err or 'нет ответа'}")
 
     # ── Updater callbacks ─────────────────────────────────────────────────
 

@@ -215,6 +215,9 @@ class SpizdiliVPNWinApp:
         self.combo_server = ttk.Combobox(sel_frame, textvariable=self.server_var, values=server_names, state="readonly", font=("Segoe UI", 10))
         self.combo_server.pack(fill="x", pady=5)
 
+        self.btn_cloud_fetch = ttk.Button(sel_frame, text="🌐 Загрузить свежие серверы из сети", style="Secondary.TButton", command=self._on_fetch_cloud_servers)
+        self.btn_cloud_fetch.pack(fill="x", pady=(4, 0))
+
         # ── Main Connect / Disconnect Button ────────────────────
         self.btn_action = ttk.Button(container, text="⚡ Подключить", style="Connect.TButton", command=self._toggle_connection)
         self.btn_action.pack(fill="x", ipady=4, pady=(0, 15))
@@ -555,6 +558,34 @@ class SpizdiliVPNWinApp:
 
         btn_gh = ttk.Button(btn_box, text="🌐 На GitHub", style="Secondary.TButton", command=_open_gh)
         btn_gh.grid(row=0, column=1, padx=(6, 0), sticky="ew")
+
+    def _on_fetch_cloud_servers(self) -> None:
+        self.btn_cloud_fetch.configure(state="disabled", text="⏳ Поиск и замер задержки...")
+        self.lbl_subtitle.configure(text="Загрузка свежих серверов VLESS Reality из сети...")
+
+        def _task():
+            try:
+                import reality_fetcher
+                servers = reality_fetcher.fetch_and_test_reality_servers(max_servers=25)
+                if servers:
+                    reality_fetcher.save_servers_to_system(servers)
+                    self.servers = servers + self.servers
+                    names = [s.get("name", f"Server {i+1}") for i, s in enumerate(self.servers)]
+
+                    def _update_ui():
+                        self.combo_server.configure(values=names)
+                        self.server_var.set(names[0])
+                        self.lbl_subtitle.configure(text=f"✓ Добавлено {len(servers)} серверов Reality!")
+                        self.btn_cloud_fetch.configure(state="normal", text="🌐 Загрузить свежие серверы из сети")
+
+                    self.root.after(0, _update_ui)
+                else:
+                    self.root.after(0, lambda: self.btn_cloud_fetch.configure(state="normal", text="🌐 Загрузить свежие серверы из сети"))
+            except Exception as exc:
+                self.root.after(0, lambda: self.lbl_subtitle.configure(text=f"Ошибка: {exc}"))
+                self.root.after(0, lambda: self.btn_cloud_fetch.configure(state="normal", text="🌐 Загрузить свежие серверы из сети"))
+
+        threading.Thread(target=_task, daemon=True).start()
 
     def _on_close(self) -> None:
         if self.connected:

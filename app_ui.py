@@ -509,8 +509,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.settings = vpn_manager.settings_manager
         self._sort_by_ping: bool = False
 
-        self.set_default_size(520, 720)
-        self.set_size_request(360, 500)
+        self.set_default_size(540, 740)
+        self.set_size_request(340, 480)
         self.set_icon_name("spizdili-vpn")
 
         self._build_ui()
@@ -533,11 +533,11 @@ class MainWindow(Adw.ApplicationWindow):
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._toast_overlay.set_child(main_box)
 
-        # Header bar with view switcher
+        # Header bar with adaptive view switcher title
         header = Adw.HeaderBar()
-        self._view_switcher = Adw.ViewSwitcher()
-        self._view_switcher.set_policy(Adw.ViewSwitcherPolicy.WIDE)
-        header.set_title_widget(self._view_switcher)
+        self._view_switcher_title = Adw.ViewSwitcherTitle()
+        self._view_switcher_title.set_title("SPIZDILI_VPN")
+        header.set_title_widget(self._view_switcher_title)
 
         # Menu button
         menu_btn = Gtk.MenuButton()
@@ -550,10 +550,23 @@ class MainWindow(Adw.ApplicationWindow):
 
         main_box.append(header)
 
-        # View stack
+        # View stack (expands to fill all window space adaptively)
         self._stack = Adw.ViewStack()
-        self._view_switcher.set_stack(self._stack)
+        self._stack.set_vexpand(True)
+        self._stack.set_hexpand(True)
+        self._view_switcher_title.set_stack(self._stack)
         main_box.append(self._stack)
+
+        # Bottom ViewSwitcherBar for compact window widths
+        self._view_switcher_bar = Adw.ViewSwitcherBar()
+        self._view_switcher_bar.set_stack(self._stack)
+        self._view_switcher_title.bind_property(
+            "title-visible",
+            self._view_switcher_bar,
+            "reveal",
+            GObject.BindingFlags.SYNC_CREATE,
+        )
+        main_box.append(self._view_switcher_bar)
 
         # Pages
         self._build_connection_page()
@@ -571,9 +584,12 @@ class MainWindow(Adw.ApplicationWindow):
         scroll.set_child(page_box)
         self._stack.add_titled_with_icon(scroll, "connection", "Подключение", "network-vpn-symbolic")
 
-        # Clamp for centered content
-        clamp = Adw.Clamp(maximum_size=500, tightening_threshold=400)
+        # Responsive clamp for centered content
+        clamp = Adw.Clamp(maximum_size=640, tightening_threshold=440)
+        clamp.set_hexpand(True)
+        clamp.set_vexpand(True)
         inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+        inner.set_hexpand(True)
         inner.set_margin_top(20)
         inner.set_margin_bottom(24)
         inner.set_margin_start(16)
@@ -709,8 +725,11 @@ class MainWindow(Adw.ApplicationWindow):
         scroll.set_child(page_box)
         self._stack.add_titled_with_icon(scroll, "profiles", "Профили", "document-properties-symbolic")
 
-        clamp = Adw.Clamp(maximum_size=600, tightening_threshold=400)
+        clamp = Adw.Clamp(maximum_size=680, tightening_threshold=460)
+        clamp.set_hexpand(True)
+        clamp.set_vexpand(True)
         inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        inner.set_hexpand(True)
         inner.set_margin_top(24)
         inner.set_margin_bottom(24)
         inner.set_margin_start(16)
@@ -799,8 +818,10 @@ class MainWindow(Adw.ApplicationWindow):
         toolbar.append(clear_btn)
         page_box.append(toolbar)
 
-        scroll = Gtk.ScrolledWindow(vexpand=True)
+        scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
         self._log_view = Gtk.TextView(editable=False, cursor_visible=False)
+        self._log_view.set_hexpand(True)
+        self._log_view.set_vexpand(True)
         self._log_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self._log_view.add_css_class("monospace-view")
         self._log_view.set_left_margin(8)
@@ -820,8 +841,11 @@ class MainWindow(Adw.ApplicationWindow):
         scroll.set_child(page_box)
         self._stack.add_titled_with_icon(scroll, "settings", "Настройки", "emblem-system-symbolic")
 
-        clamp = Adw.Clamp(maximum_size=600, tightening_threshold=400)
+        clamp = Adw.Clamp(maximum_size=680, tightening_threshold=460)
+        clamp.set_hexpand(True)
+        clamp.set_vexpand(True)
         inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        inner.set_hexpand(True)
         inner.set_margin_top(24)
         inner.set_margin_bottom(24)
         inner.set_margin_start(16)

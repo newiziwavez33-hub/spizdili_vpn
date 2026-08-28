@@ -490,7 +490,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.3)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.5)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -607,7 +607,7 @@ class MainWindow(Adw.ApplicationWindow):
         title_box.append(app_title_lbl)
 
         app_ver_lbl = Gtk.Label()
-        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.4</span>")
+        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.5</span>")
         title_box.append(app_ver_lbl)
 
         # ── Mascot Image (SPIZDILI_VPN raccoon logo) ────────────────────
@@ -1066,6 +1066,16 @@ class MainWindow(Adw.ApplicationWindow):
             description="Автоматическое и ручное обновление из GitHub Releases",
         )
 
+        ver_row = Adw.ActionRow(
+            title="Версия приложения",
+            subtitle=f"Установленная версия: v {APP_VERSION}",
+        )
+        ver_badge = Gtk.Label(label=f"v {APP_VERSION}")
+        ver_badge.add_css_class("badge-wg")
+        ver_badge.set_valign(Gtk.Align.CENTER)
+        ver_row.add_suffix(ver_badge)
+        upd_group.add(ver_row)
+
         check_row = Adw.ActionRow(
             title="Проверить наличие обновлений",
             subtitle="Сравнить текущую версию с последним релизом на GitHub",
@@ -1149,35 +1159,126 @@ class MainWindow(Adw.ApplicationWindow):
         if info is None:
             self._show_toast("Обновлений нет — у вас актуальная версия")
             return
-        # Show update dialog
-        dlg = Adw.MessageDialog(
-            transient_for=self,
-            modal=True,
-            heading=f"Доступно обновление {info['tag']}",
-            body=(info.get("body") or "")[:600] or "Новая версия доступна на GitHub.",
-        )
-        dlg.add_response("cancel", "Позже")
-        dlg.add_response("install", "Установить")
-        dlg.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
-        dlg.connect("response", self._on_update_dialog_response, info)
-        dlg.present()
 
-    def _on_update_dialog_response(self, dlg, response: str, info: dict) -> None:
-        if response != "install" or not info.get("deb_url"):
-            return
+        # Modern wide adaptive update window (720px wide)
+        win = Gtk.Window(transient_for=self, modal=True, title="Обновление SPIZDILI_VPN")
+        win.set_default_size(720, 520)
+        win.set_size_request(400, 360)
+        win.set_resizable(True)
 
-        self._show_toast("Скачиваю обновление…")
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        win.set_child(vbox)
 
-        def _progress(frac):
-            GLib.idle_add(self._show_toast, f"Скачиваю… {int(frac*100)}%")
+        header = Adw.HeaderBar()
+        header.set_show_end_title_buttons(True)
+        vbox.append(header)
 
-        def _done(ok, err):
-            if ok:
-                GLib.idle_add(self._show_toast, "✓ Обновление установлено! Перезапустите приложение.")
-            else:
-                GLib.idle_add(self._show_toast, f"Ошибка установки: {err[:120]}")
+        clamp = Adw.Clamp(maximum_size=680, tightening_threshold=500)
+        clamp.set_vexpand(True)
+        clamp.set_hexpand(True)
+        vbox.append(clamp)
 
-        _updater.download_and_install(info["deb_url"], info["deb_name"], _progress, _done)
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        inner.set_margin_top(16)
+        inner.set_margin_bottom(20)
+        inner.set_margin_start(24)
+        inner.set_margin_end(24)
+        clamp.set_child(inner)
+
+        t_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, halign=Gtk.Align.CENTER)
+        h_lbl = Gtk.Label()
+        h_lbl.set_markup(f"<span size='20000' weight='bold'>🚀 Доступно обновление {info['tag']}</span>")
+        t_box.append(h_lbl)
+
+        sub_lbl = Gtk.Label()
+        sub_lbl.set_markup(f"<span size='11000' foreground='#89b4fa'>Текущая версия: v {APP_VERSION}  •  Новая версия: {info['tag']}</span>")
+        t_box.append(sub_lbl)
+        inner.append(t_box)
+
+        notes_label = Gtk.Label(label="Что нового в этом обновлении:")
+        notes_label.set_halign(Gtk.Align.START)
+        notes_label.add_css_class("heading")
+        inner.append(notes_label)
+
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_size_request(-1, 220)
+        scroll.add_css_class("card")
+
+        notes_tv = Gtk.TextView(editable=False, cursor_visible=False, wrap_mode=Gtk.WrapMode.WORD)
+        notes_tv.set_top_margin(12)
+        notes_tv.set_bottom_margin(12)
+        notes_tv.set_left_margin(16)
+        notes_tv.set_right_margin(16)
+        notes_tv.get_buffer().set_text(info.get("body") or "Свежее обновление с улучшенной производительностью и стабильностью.")
+        scroll.set_child(notes_tv)
+        inner.append(scroll)
+
+        prog_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        prog_box.set_visible(False)
+        p_label = Gtk.Label(label="Скачивание обновления…")
+        p_label.set_halign(Gtk.Align.CENTER)
+        p_bar = Gtk.ProgressBar()
+        p_bar.set_show_text(True)
+        prog_box.append(p_label)
+        prog_box.append(p_bar)
+        inner.append(prog_box)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, halign=Gtk.Align.END)
+        inner.append(btn_box)
+
+        cancel_btn = Gtk.Button(label="Напомнить позже")
+        cancel_btn.add_css_class("flat")
+        cancel_btn.connect("clicked", lambda _: win.close())
+        btn_box.append(cancel_btn)
+
+        install_btn = Gtk.Button(label="Установить обновление")
+        install_btn.add_css_class("suggested-action")
+        install_btn.add_css_class("pill")
+
+        def _start_install(_btn):
+            install_btn.set_sensitive(False)
+            cancel_btn.set_sensitive(False)
+            prog_box.set_visible(True)
+            p_bar.set_fraction(0.0)
+            p_bar.set_text("0%")
+
+            def _on_prog(frac):
+                def _ui():
+                    p_bar.set_fraction(frac)
+                    p_bar.set_text(f"{int(frac*100)}%")
+                    p_label.set_text(f"Скачивание… {int(frac*100)}%")
+                GLib.idle_add(_ui)
+
+            def _on_done(ok, err):
+                def _ui():
+                    if ok:
+                        p_label.set_markup("<span foreground='#a6e3a1' weight='bold'>✓ Обновление успешно установлено!</span>")
+                        p_bar.set_fraction(1.0)
+                        p_bar.set_text("Готово")
+                        install_btn.set_label("Перезапустить")
+                        install_btn.set_sensitive(True)
+                        install_btn.disconnect_by_func(_start_install)
+                        install_btn.connect("clicked", lambda _: self._restart_app())
+                    else:
+                        p_label.set_markup(f"<span foreground='#f38ba8'>Ошибка: {err[:120]}</span>")
+                        cancel_btn.set_sensitive(True)
+                GLib.idle_add(_ui)
+
+            _updater.download_and_install(info["deb_url"], info["deb_name"], _on_prog, _on_done)
+
+        install_btn.connect("clicked", _start_install)
+        btn_box.append(install_btn)
+
+        win.present()
+
+    def _restart_app(self) -> None:
+        import subprocess, sys
+        try:
+            subprocess.Popen(["gtk-launch", "spizdili-vpn"])
+        except Exception:
+            subprocess.Popen([sys.executable] + sys.argv)
+        self.close()
 
     def _schedule_auto_update_check(self) -> None:
         if _updater is None:
@@ -1197,12 +1298,12 @@ class MainWindow(Adw.ApplicationWindow):
         if self._connected or self._connecting:
             return
 
-        cloud_candidates = [f"Cloud-{i}" for i in range(1, 6)]
+        cloud_candidates = [f"Cloud-{i}" for i in range(1, 7)]
         available = [p for p in cloud_candidates if hasattr(self, "_profile_names") and p in self._profile_names]
         if not available:
             return
 
-        self._show_toast("🔍 Проверка серверов Облако 1–5 и выбор самого быстрого…", timeout=3)
+        self._show_toast("🔍 Проверка серверов Облако 1–6 и выбор самого быстрого…", timeout=3)
 
         def _worker():
             best_profile = None
@@ -1321,11 +1422,17 @@ class MainWindow(Adw.ApplicationWindow):
         # Update dropdown model
         self._profile_model.splice(0, self._profile_model.get_n_items(), display_names)
 
-        # Select last connected
+        # Select last connected, or default to fastest Cloud server
         last = self.cfg.get_last_connected()
         if last and last in self._profile_names:
             idx = self._profile_names.index(last)
             self._profile_dropdown_row.set_selected(idx)
+        else:
+            cloud_defaults = [p for p in self._profile_names if p.startswith("Cloud-")]
+            if cloud_defaults:
+                self._profile_dropdown_row.set_selected(self._profile_names.index(cloud_defaults[0]))
+            elif self._profile_names:
+                self._profile_dropdown_row.set_selected(0)
 
         # Update listbox
         self._rebuild_profile_list(profiles)

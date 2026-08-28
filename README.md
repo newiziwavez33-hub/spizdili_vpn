@@ -2,7 +2,7 @@
   <img src="icons/spizdili-logo.png" width="220" alt="SPIZDILI_VPN Logo" />
 </p>
 
-<h1 align="center">🦝 SPIZDILI_VPN (v1.0.3)</h1>
+<h1 align="center">🦝 SPIZDILI_VPN (v1.0.5)</h1>
 
 <p align="center">
   <b>Современный, автономный и быстрый VPN-клиент для Windows 7/8/10/11 и Linux</b><br>
@@ -12,7 +12,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-7%20%7C%208%20%7C%2010%20%7C%2011-0078D6?style=flat-square&logo=windows" alt="Windows" />
   <img src="https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Debian%20%7C%20Arch%20%7C%20Fedora-E95420?style=flat-square&logo=ubuntu" alt="Linux" />
-  <img src="https://img.shields.io/badge/GUI-Native%20Dark%20%2B%20GTK4-blue?style=flat-square" alt="GUI" />
+  <img src="https://img.shields.io/badge/Version-v1.0.5-blue?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/Servers-51%20Nodes-success?style=flat-square" alt="Servers" />
   <img src="https://img.shields.io/badge/Protocols-VLESS%20Reality%20%7C%20WireGuard%20%7C%20AWG-purple?style=flat-square" alt="Protocols" />
   <img src="https://img.shields.io/badge/AI%20Optimized-Antigravity%20%7C%20Gemini%20%7C%20Claude%20%7C%20ChatGPT-brightgreen?style=flat-square" alt="AI Optimized" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="License" />
@@ -22,40 +23,54 @@
 
 ## 🪟 Запуск на Windows 7 / 8 / 10 / 11 (Без установки)
 
-Версия для Windows собрана в виде **портативного `.exe` файла**, работающего «из коробки» на любой версии Windows (7 SP1, 8.1, 10, 11):
+Версия для Windows собрана в виде **автономного `.exe` файла**, работающего «из коробки» на любой версии Windows (7 SP1, 8.1, 10, 11):
 
-1. Перейдите во вкладку **[Releases](https://github.com/newiziwavez33-hub/spizdili_vpn/releases)**.
-2. Скачайте **`SPIZDILI_VPN.exe`** (или `SPIZDILI_VPN-v1.0.3-Windows-x64.zip`).
-3. Запустите `SPIZDILI_VPN.exe` — приложение готово к работе сразу со всеми 37 серверами и AI-оптимизацией!
+1. Перейдите во вкладку **[Releases](https://github.com/newiziwavez33-hub/spizdili_vpn/releases/latest)**.
+2. Скачайте **`SPIZDILI_VPN.exe`** (или `SPIZDILI_VPN_v1.0.5_Windows_x64.zip`).
+3. Запустите `SPIZDILI_VPN.exe` — приложение готово к работе сразу со всеми 51 серверами, автоподключением к самому быстрому Облаку и AI-оптимизацией!
 
 ---
 
-## 🐧 Установка на Linux (Ubuntu / Debian / Pop!_OS / Fedora / Arch)
+## 🐧 Установка на Linux (Ubuntu / Debian / Astra / Mint / Fedora / Arch)
 
+### Способ 1: Установка готового DEB пакета (Рекомендуется)
+Скачайте **`spizdili-vpn_1.0.5_amd64.deb`** из [последнего релиза](https://github.com/newiziwavez33-hub/spizdili_vpn/releases/latest) и установите:
 ```bash
-# Клонируйте репозиторий
+sudo dpkg -i spizdili-vpn_1.0.5_amd64.deb
+```
+
+### Способ 2: Установка из исходного кода
+```bash
 git clone https://github.com/newiziwavez33-hub/spizdili_vpn.git
 cd spizdili_vpn
-
-# Запустите автономную установку
 sudo ./install.sh
 ```
 
 ---
 
-## 🌟 Ключевые возможности
+## 🌟 Ключевые возможности версии 1.0.5
 
-- 🚀 **100% Автономность без подписок:**
-  - Никаких внешних сервисов авторизации, триалов, логинов или паролей.
-  - Встроена база из **37 европейских и мировых серверов** с прямым шифрованным подключением.
+- ⚡ **Автоподключение к самому быстрому серверу «Облако 1–6» при старте:**
+  - При запуске приложение за 1 секунду проверяет отклик европейских и американских серверов **«Облако» (с 1 по 6)**.
+  - Находит ноду с минимальной задержкой и **автоматически подключается к ней**, избавляя от ручного выбора!
+- 🌐 **База из 51 скоростного сервера без подписок:**
+  - **14 проверенных нод VLESS Reality** (Швеция, Германия, Нидерланды, США, Сингапур, Корея) со сквозной валидацией реальным трафиком.
+  - **37 выделенных европейских серверов** с протоколами VLESS Reality, WireGuard и AmneziaWG.
+  - Никаких триалов, логинов, паролей или абонентской платы.
+- 🔄 **Широкое и адаптивное окно обновления:**
+  - Окно обновления стало в 2 раза шире (720px) и полностью адаптируется под любой экран.
+  - Встроен интерактивный индикатор прогресса (ProgressBar) со шкалой процентов и кнопкой мгновенного перезапуска после установки.
+  - Раздел «Настройки» теперь отображает текущую установленную версию с динамическим обновлением.
+- 📱 **Мгновенная синхронизация профилей:**
+  - Выбор сервера в списке «Профили» сразу обновляет селектор на главной вкладке, отображает флаг страны и переключает на экран подключения.
 - 🤖 **Специальная оптимизация для AI IDE и разработчиков:**
   - Безупречная работа с **Google Antigravity 2.11**, **Google Gemini**, **ChatGPT**, **Anthropic Claude**, **GitHub Copilot**, **OpenCode** и **Cursor**.
   - Защита длинных потоковых сессий (gRPC / Server-Sent Events / SSE): буфер 64 КБ, `connIdle: 900s`, TCP Keep-Alive (`15s`), отключение Nagle (`tcpNoDelay: true`).
   - Приоритетный DoH (DNS-over-HTTPS) с принудительным `UseIPv4` для мгновенного резолва доменов OpenAI, Anthropic и Google Cloud.
 - 🛡️ **Поддержка передовых протоколов:**
-  - **VLESS Reality (XTLS-rprx-vision):** маскировка под доверенные HTTPS-ресурсы, полная устойчивость к блокировкам провайдеров.
+  - **VLESS Reality (XTLS-rprx-vision):** маскировка под доверенные ресурсы (`yandex.net`, `cloudflare.com`, `samsung.com`, `x5.ru`, `intel.com`), полная устойчивость к блокировкам провайдеров.
   - **AmneziaWG (AWG):** обфускация заголовков WireGuard (Jc/Jmin/Jmax/S1/S2/H1/H2).
-  - **Стандартный WireGuard:** классический сверхбыстрый туннель.
+  - **WireGuard:** классический сверхбыстрый туннель.
 - 💻 **Глобальная маршрутизация через ядро Linux (TUN):**
   - Создание виртуального адаптера `tun_wavez` с MTU 1400 и автоматической таблицей маршрутизации `51820`.
   - Все приложения системы (браузеры, терминал, IDE, Docker, cURL) защищены туннелем.
@@ -67,11 +82,6 @@ sudo ./install.sh
 - 🔍 **Умный поиск и сортировка серверов:**
   - Мгновенный живой поиск по странам, флагам, IP и протоколам.
   - Кнопка «Сортировать по пингу» для быстрого выбора самого скоростного сервера.
-- 🔄 **Автоматическое и ручное обновление (GitHub Releases):**
-  - Фоновая автоматическая проверка новых версий на GitHub при старте приложения.
-  - Кнопка ручной проверки «Проверить сейчас» и диалог обновления с установкой в 1 клик для Linux (.deb) и Windows (.exe).
-- 📱 **Адаптивный интерфейс (Adaptive Layout):**
-  - Поддержка любых разрешений экрана, тайлинга и изменения размеров окна без переполнения шапки (`Adw.ViewSwitcherTitle` + `Adw.ViewSwitcherBar`).
 - 🇷🇺 **Мультиязычный интерфейс (100% Русский / English):**
   - Переключение языка «на лету» во вкладке настроек.
 - 🎛️ **Системный трей:**
@@ -79,74 +89,37 @@ sudo ./install.sh
 
 ---
 
-## 📦 Быстрая установка «из коробки»
+## 🗂️ Список встроенных серверов (51 локация)
 
-Установщик полностью автономен. На чистой системе выполните:
+| № | Флаг и Страна | Протокол | Маскировка / Хост | Назначение |
+|---|---|---|---|---|
+| 1 | 🇸🇪 Швеция (Облако #1) | VLESS Reality | `sw.api-yandex.net` (282ms) | Сверхбыстрый, P2P, AI |
+| 2 | 🇩🇪 Германия (Облако #2) | VLESS Reality | `www.cloudflare.com` (343ms) | Веб-серфинг, Streaming |
+| 3 | 🇳🇱 Нидерланды (Облако #3) | VLESS Reality | `ads.x5.ru` (358ms) | Стабильный, AI IDE |
+| 4 | 🇩🇪 Германия (Облако #4) | VLESS Reality | `www.cloudflare.com` (382ms) | Резервный маршрут |
+| 5 | 🇳🇱 Нидерланды (Облако #5) | VLESS Reality | `www.samsung.com` (441ms) | Низкий пинг, Media |
+| 6 | 🇺🇸 США (Облако #6) | VLESS Reality | `www.intel.com` (861ms) | Доступ к сервисам США |
+| 7 | 🇺🇸 США (Облако #7) | VLESS Reality | `www.amd.com` (874ms) | Разработка, AI APIs |
+| 8 | 🇺🇸 США (Облако #8) | VLESS Reality | `www.sony.com` (1012ms) | CDN США |
+| 9 | 🇺🇸 США (Облако #9) | VLESS Reality | `www.tesla.com` (1041ms) | Защита от блокировок |
+| 10 | 🇸🇬 Сингапур (Облако #10) | VLESS Reality | `www.nvidia.com` (1462ms) | Азиатский шлюз |
+| 11 | 🇸🇬 Сингапур (Облако #11) | VLESS Reality | `www.nvidia.com` (1476ms) | Резервный азиатский |
+| 12 | 🇸🇬 Сингапур (Облако #12) | VLESS Reality | `www.intel.com` (1485ms) | Сверхнадежный |
+| 13 | 🇸🇬 Сингапур (Облако #13) | VLESS Reality | `www.amd.com` (2042ms) | Дальний восток |
+| 14 | 🇰🇷 Корея (Облако #14) | VLESS Reality | `www.apple.com` (2052ms) | Прямой азиатский |
+| 15–51 | 🇪🇺 Европа (37 серверов) | VLESS / AWG / WG | Финляндия, Германия, Нидерланды и др. | Базовый европейский пул |
 
+---
+
+## 🛠️ Сборка из исходников
+
+### Сборка `.deb` пакета для Linux:
 ```bash
-# Клонируйте репозиторий
-git clone https://github.com/newiziwavez33-hub/spizdili_vpn.git
-cd spizdili_vpn
-
-# Запустите автономную установку
-sudo ./install.sh
+dpkg-deb --root-owner-group -b package_dir spizdili-vpn_1.0.5_amd64.deb
 ```
 
-Скрипт автоматически:
-1. Установит необходимые зависимости (`GTK4`, `Libadwaita`, `wireguard-tools`, `xray-core`, `python3-gi`).
-2. Настроит права ядра `CAP_NET_ADMIN` для сетевого туннеля.
-3. Развернет базу из 37 серверов и оптимальные конфигурации.
-4. Установит квадратную системную иконку и ярлык в меню приложений.
-
----
-
-## 🚀 Запуск
-
-- **Из меню приложений:** найдите ярлык **`SPIZDILI_VPN`** 🦝
-- **Из терминала:**
-  ```bash
-  spizdili-vpn
-  # или
-  wavez-vpn-client
-  ```
-
----
-
-## 📂 Структура проекта
-
+### Сборка standalone `.exe` для Windows (PyInstaller):
+```bash
+python windows/build_exe.py
+# Создает dist/SPIZDILI_VPN.exe и dist/SPIZDILI_VPN_v1.0.5_Windows_x64.zip
 ```
-spizdili_vpn/
-├── app_ui.py                 # GTK4 + Libadwaita графический интерфейс
-├── main.py                   # Точка входа, жизненный цикл и обработка сигналов
-├── vpn_manager.py            # Управление туннелями, сетевыми счетчиками и DNS
-├── xray_manager.py           # Движок VLESS Reality, маршрутизация и DoH
-├── settings_manager.py       # Менеджер настроек (JSON)
-├── incy_importer.py          # Парсер и генератор профилей серверов
-├── subscription_parser.py    # Поддержка импорта ссылок (vless://, wg://, awg://)
-├── health_checker.py         # Диагностика и замер задержки серверов
-├── tray_subprocess.py        # Изолированный процесс системного трея (GTK3)
-├── vpn-helper                # Привилегированный хелпер маршрутизации ядра
-├── wavez_servers.json        # Встроенная база 37 автономных серверов
-├── install.sh                # Комплексный скрипт установки/удаления
-├── icons/                    # Квадратные и векторные иконки приложения
-└── com.wavez.vpnclient.*     # Файлы Polkit и .desktop
-```
-
----
-
-## 🛠️ Диагностика и удаление
-
-- **Проверка состояния системы и зависимостей:**
-  ```bash
-  sudo ./install.sh --check
-  ```
-- **Полное чистое удаление:**
-  ```bash
-  sudo ./install.sh --uninstall
-  ```
-
----
-
-## 📄 Лицензия
-
-Распространяется под лицензией [GPL-3.0 License](LICENSE).

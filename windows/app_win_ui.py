@@ -205,7 +205,7 @@ class SpizdiliVPNWinApp:
         self.lbl_subtitle.pack(pady=(0, 15))
 
         # ── Server Selector ─────────────────────────────────────────────
-        sel_frame = ttk.LabelFrame(container, text="  Выбор локации (37 серверов)  ", padding=10)
+        sel_frame = ttk.LabelFrame(container, text=f"  Выбор локации ({len(self.servers)} серверов)  ", padding=10)
         sel_frame.pack(fill="x", pady=(0, 15))
 
         server_names = [s.get("name", f"Server {i+1}") for i, s in enumerate(self.servers)]
@@ -590,7 +590,7 @@ class SpizdiliVPNWinApp:
 
     def _auto_select_fastest_cloud(self) -> None:
         def _worker():
-            cloud_servers = [s for s in self.servers if s.get("ascii_name", "").startswith("Cloud-")][:5]
+            cloud_servers = [s for s in self.servers if s.get("ascii_name", "").startswith("Cloud-")][:6]
             if not cloud_servers:
                 return
             best_server = None

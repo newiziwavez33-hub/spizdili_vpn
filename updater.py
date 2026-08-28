@@ -165,7 +165,7 @@ class AppUpdater:
                 info.exe_asset_url = download_url
                 info.exe_asset_name = name
                 info.exe_asset_size = size
-            elif name_lower.endswith(".zip") and ("win" in name_lower or "x64" in name_lower or "spizdili" in name_lower or "raccpass" in name_lower):
+            elif name_lower.endswith(".zip") and ("win" in name_lower or "x64" in name_lower or "spizdili" in name_lower):
                 info.zip_asset_url = download_url
                 info.zip_asset_name = name
                 info.zip_asset_size = size
@@ -264,8 +264,6 @@ class AppUpdater:
             target_path = target_exe.resolve()
         else:
             target_path = Path(__file__).resolve().parent / "dist" / "SPIZDILI_VPN.exe"
-            if not target_path.is_file():
-                target_path = Path(__file__).resolve().parent / "dist" / "RaccPass_VPN.exe"
 
         bat_script = Path(tempfile.gettempdir()) / "spizdili_updater.bat"
         
@@ -274,7 +272,6 @@ title SPIZDILI VPN Updater
 echo Waiting for SPIZDILI VPN to close...
 timeout /t 2 /nobreak > nul
 taskkill /f /im SPIZDILI_VPN.exe > nul 2>&1
-taskkill /f /im RaccPass_VPN.exe > nul 2>&1
 timeout /t 1 /nobreak > nul
 
 echo Applying update...

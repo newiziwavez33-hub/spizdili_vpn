@@ -2071,8 +2071,6 @@ class UpdateDialog(Adw.Window):
                         pass
                     if Path("/usr/local/bin/spizdili-vpn").is_file():
                         subprocess.Popen(["/usr/local/bin/spizdili-vpn"])
-                    elif Path("/usr/local/bin/raccpass-vpn").is_file():
-                        subprocess.Popen(["/usr/local/bin/raccpass-vpn"])
                     else:
                         subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / "main.py")] + sys.argv[1:])
                     if self.parent_win and hasattr(self.parent_win, "app"):

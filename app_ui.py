@@ -1006,23 +1006,11 @@ class MainWindow(Adw.ApplicationWindow):
 
         inner.append(diag_group)
 
-        # ── Group 4: Incy Synchronization ─────────────────────────────────
-        incy_group = Adw.PreferencesGroup(
-            title="Каталог серверов и синхронизация",
-            description="Управление базой 37 серверов Reality и сброс настроек",
+        # ── Group 4: Server Catalogue & Reset ─────────────────────────────
+        catalog_group = Adw.PreferencesGroup(
+            title="Каталог серверов и сброс",
+            description="Управление каталогом серверов и сброс параметров",
         )
-
-        sync_row = Adw.ActionRow(
-            title="Синхронизация параметров",
-            subtitle="Перечитать параметры из профиля Incy",
-        )
-        sync_btn = Gtk.Button(label="Синхронизировать")
-        sync_btn.add_css_class("suggested-action")
-        sync_btn.add_css_class("pill")
-        sync_btn.set_valign(Gtk.Align.CENTER)
-        sync_btn.connect("clicked", self._on_sync_from_incy_clicked)
-        sync_row.add_suffix(sync_btn)
-        incy_group.add(sync_row)
 
         import_incy_row = Adw.ActionRow(
             title="Импорт каталога серверов",
@@ -1034,7 +1022,7 @@ class MainWindow(Adw.ApplicationWindow):
         import_incy_btn.set_valign(Gtk.Align.CENTER)
         import_incy_btn.connect("clicked", self._on_import_incy_servers_clicked)
         import_incy_row.add_suffix(import_incy_btn)
-        incy_group.add(import_incy_row)
+        catalog_group.add(import_incy_row)
 
         reset_row = Adw.ActionRow(
             title="Сброс настроек",
@@ -1046,9 +1034,9 @@ class MainWindow(Adw.ApplicationWindow):
         reset_btn.set_valign(Gtk.Align.CENTER)
         reset_btn.connect("clicked", self._on_reset_settings_clicked)
         reset_row.add_suffix(reset_btn)
-        incy_group.add(reset_row)
+        catalog_group.add(reset_row)
 
-        inner.append(incy_group)
+        inner.append(catalog_group)
 
         # ── Updates group ─────────────────────────────────────────────────
         upd_group = Adw.PreferencesGroup(

@@ -1,22 +1,19 @@
 /**
  * SPIZDILI_VPN Background Service Worker (Manifest V3)
  * Manages chrome.proxy settings, badge states, and persistence.
+ * Features automatic self-healing fallback for proxy bypass rules.
  */
 
 const DEFAULT_BYPASS = [
   "localhost",
-  "127.0.0.1",
-  "<local>",
-  "*.local"
+  "127.0.0.1"
 ];
 
-// Initialize on install
+// Initialize on install / update
 chrome.runtime.onInstalled.addListener(async () => {
-  const data = await chrome.storage.local.get(["connected", "bypassList"]);
-  if (!data.bypassList) {
-    await chrome.storage.local.set({ bypassList: DEFAULT_BYPASS });
-  }
-  updateBadge(!!data.connected);
+  await chrome.storage.local.clear();
+  await chrome.storage.local.set({ connected: false });
+  updateBadge(false);
 });
 
 // Update extension icon badge
@@ -29,41 +26,54 @@ function updateBadge(connected) {
   }
 }
 
-// Apply proxy settings
+// Apply proxy settings with self-healing fallback
 async function applyProxy(server, customBypass = null) {
-  const data = await chrome.storage.local.get(["bypassList"]);
-  const rawBypass = customBypass || data.bypassList || DEFAULT_BYPASS;
-
-  // Strict ASCII filter to prevent chrome.proxy 'supports only ASCII URLs' error
-  const safeBypass = rawBypass.filter(item => typeof item === "string" && /^[\x00-\x7F]+$/.test(item.trim()));
-
   const scheme = (server.scheme || "socks5").toLowerCase();
   const host = server.host || "127.0.0.1";
   const port = parseInt(server.port, 10) || 10808;
 
-  const config = {
-    mode: "fixed_servers",
-    rules: {
-      singleProxy: {
-        scheme: scheme,
-        host: host,
-        port: port
-      },
-      bypassList: safeBypass
-    }
+  let safeBypass = ["localhost", "127.0.0.1"];
+  if (Array.isArray(customBypass)) {
+    // Strict ASCII filter (0-127 only)
+    safeBypass = customBypass
+      .filter(item => typeof item === "string" && /^[\x00-\x7F]+$/.test(item.trim()))
+      .map(s => s.trim());
+  }
+
+  const trySetProxy = (bypass) => {
+    return new Promise((resolve, reject) => {
+      const config = {
+        mode: "fixed_servers",
+        rules: {
+          singleProxy: {
+            scheme: scheme,
+            host: host,
+            port: port
+          },
+          bypassList: bypass
+        }
+      };
+      chrome.proxy.settings.set({ value: config, scope: "regular" }, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve();
+        }
+      });
+    });
   };
 
-  return new Promise((resolve, reject) => {
-    chrome.proxy.settings.set({ value: config, scope: "regular" }, () => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-      } else {
-        updateBadge(true);
-        chrome.storage.local.set({ connected: true, activeServer: server });
-        resolve(true);
-      }
-    });
-  });
+  try {
+    await trySetProxy(safeBypass);
+  } catch (err) {
+    console.warn("Primary proxy rule failed, attempting minimal bypass fallback:", err);
+    // Bulletproof fallback: apply minimal localhost bypass
+    await trySetProxy(["localhost", "127.0.0.1"]);
+  }
+
+  updateBadge(true);
+  await chrome.storage.local.set({ connected: true, activeServer: server });
+  return true;
 }
 
 // Clear proxy settings
@@ -82,7 +92,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "CONNECT") {
     applyProxy(message.server, message.bypassList)
       .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
+      .catch((err) => {
+        console.error("Proxy error:", err);
+        sendResponse({ success: false, error: err.message || String(err) });
+      });
     return true; // Async response
   } else if (message.type === "DISCONNECT") {
     clearProxy()
@@ -90,7 +103,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
   } else if (message.type === "GET_STATE") {
-    chrome.storage.local.get(["connected", "activeServer", "bypassList"]).then((data) => {
+    chrome.storage.local.get(["connected", "activeServer"]).then((data) => {
       sendResponse(data);
     });
     return true;

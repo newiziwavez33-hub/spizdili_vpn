@@ -72,40 +72,24 @@ const SERVERS = {
   }
 };
 
-// ONLY VALID ASCII PUNYCODE - never put raw Cyrillic in rules.bypassList
+// Pure ASCII hostnames for bypass
 const RU_BYPASS_DOMAINS = [
-  "*.ru",
-  "*.su",
-  "*.xn--p1ai",
   "gosuslugi.ru",
-  "*.gosuslugi.ru",
   "nalog.ru",
-  "*.nalog.ru",
   "mos.ru",
-  "*.mos.ru",
   "sberbank.ru",
-  "*.sberbank.ru",
   "tinkoff.ru",
-  "*.tinkoff.ru",
   "vtb.ru",
-  "*.vtb.ru",
   "yandex.ru",
-  "*.yandex.ru",
   "vk.com",
-  "*.vk.com",
   "kinopoisk.ru",
-  "*.kinopoisk.ru",
   "wildberries.ru",
-  "*.wildberries.ru",
-  "ozon.ru",
-  "*.ozon.ru"
+  "ozon.ru"
 ];
 
 const DEFAULT_BYPASS = [
   "localhost",
-  "127.0.0.1",
-  "<local>",
-  "*.local"
+  "127.0.0.1"
 ];
 
 // DOM Elements
@@ -127,7 +111,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (response) {
       isConnected = !!response.connected;
       if (response.activeServer) {
-        // Match active server
         for (const [k, v] of Object.entries(SERVERS)) {
           if (v.host === response.activeServer.host && v.port === response.activeServer.port) {
             serverSelect.value = k;
@@ -142,7 +125,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // Load saved prefs
   const stored = await chrome.storage.local.get(["bypassRu", "selectedServerKey"]);
   if (stored.bypassRu !== undefined) {
     chkBypassRu.checked = stored.bypassRu;
@@ -191,8 +173,8 @@ function handleConnect() {
     bypass = bypass.concat(RU_BYPASS_DOMAINS);
   }
 
-  // Ensure pure ASCII
-  const asciiBypass = bypass.filter(item => typeof item === "string" && /^[\x00-\x7F]+$/.test(item.trim()));
+  // Ensure pure ASCII only
+  const asciiBypass = bypass.filter(item => typeof item === "string" && /^[\x00-\x7F]+$/.test(item.trim())).map(s => s.trim());
 
   chrome.runtime.sendMessage(
     {
@@ -256,7 +238,6 @@ async function fetchExternalIP() {
       const data = await res.json();
       extIp.textContent = data.ip;
 
-      // Query country
       try {
         const geoRes = await fetch(`http://ip-api.com/json/${data.ip}?fields=country,countryCode,city`);
         if (geoRes.ok) {

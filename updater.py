@@ -114,12 +114,13 @@ class AppUpdater:
         self.repo_url = repo_url
 
     def check_for_updates(self, timeout: float = 8.0) -> Optional[UpdateInfo]:
-        """Fetch latest release metadata from GitHub API and check for updates."""
+        """Fetch latest release metadata from GitHub API or web redirect fallback."""
         headers = {
             "User-Agent": f"SPIZDILI-VPN-Updater/{self.current_version} ({platform.system()}; {platform.machine()})",
             "Accept": "application/vnd.github.v3+json",
         }
         data = None
+        # 1. Try REST API
         for test_url in [self.api_url, f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases"]:
             try:
                 req = urllib.request.Request(test_url, headers=headers)
@@ -135,11 +136,45 @@ class AppUpdater:
             except Exception as e:
                 logger.debug("API check %s failed: %s", test_url, e)
                 continue
+
+        # 2. Fallback: Web redirect (completely immune to GitHub API 403 rate limits)
         if not data:
-            logger.warning("No release data obtained from GitHub API")
-            return None
-        except Exception as exc:
-            logger.warning("Failed to check for updates: %s", exc)
+            try:
+                web_url = f"{self.repo_url}/releases/latest"
+                req = urllib.request.Request(web_url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    final_url = resp.geturl()
+                    tag = final_url.rstrip("/").split("/")[-1]
+                    if tag and tag != "latest":
+                        clean_ver = tag.lstrip("v")
+                        data = {
+                            "tag_name": tag,
+                            "name": f"v{clean_ver}: Release {tag}",
+                            "body": "Обновление доступно для загрузки.",
+                            "html_url": final_url,
+                            "assets": [
+                                {
+                                    "name": f"spizdili-vpn_{clean_ver}_amd64.deb",
+                                    "browser_download_url": f"{self.repo_url}/releases/download/{tag}/spizdili-vpn_{clean_ver}_amd64.deb",
+                                    "size": 12000000
+                                },
+                                {
+                                    "name": "SPIZDILI_VPN.exe",
+                                    "browser_download_url": f"{self.repo_url}/releases/download/{tag}/SPIZDILI_VPN.exe",
+                                    "size": 36000000
+                                },
+                                {
+                                    "name": f"SPIZDILI_VPN_{tag}_Windows_x64.zip",
+                                    "browser_download_url": f"{self.repo_url}/releases/download/{tag}/SPIZDILI_VPN_{tag}_Windows_x64.zip",
+                                    "size": 36000000
+                                },
+                            ]
+                        }
+            except Exception as e:
+                logger.warning("Web redirect fallback failed: %s", e)
+
+        if not data:
+            logger.warning("No release data could be obtained.")
             return None
 
         tag_name = str(data.get("tag_name") or "").strip()

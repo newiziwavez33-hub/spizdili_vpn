@@ -16,11 +16,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!data.bypassList) {
     await chrome.storage.local.set({ bypassList: DEFAULT_BYPASS });
   }
-  if (data.connected) {
-    updateBadge(true);
-  } else {
-    updateBadge(false);
-  }
+  updateBadge(!!data.connected);
 });
 
 // Update extension icon badge
@@ -36,7 +32,10 @@ function updateBadge(connected) {
 // Apply proxy settings
 async function applyProxy(server, customBypass = null) {
   const data = await chrome.storage.local.get(["bypassList"]);
-  const bypass = customBypass || data.bypassList || DEFAULT_BYPASS;
+  const rawBypass = customBypass || data.bypassList || DEFAULT_BYPASS;
+
+  // Strict ASCII filter to prevent chrome.proxy 'supports only ASCII URLs' error
+  const safeBypass = rawBypass.filter(item => typeof item === "string" && /^[\x00-\x7F]+$/.test(item.trim()));
 
   const scheme = (server.scheme || "socks5").toLowerCase();
   const host = server.host || "127.0.0.1";
@@ -50,7 +49,7 @@ async function applyProxy(server, customBypass = null) {
         host: host,
         port: port
       },
-      bypassList: bypass
+      bypassList: safeBypass
     }
   };
 

@@ -8,43 +8,73 @@ const SERVERS = {
     scheme: "socks5",
     host: "127.0.0.1",
     port: 10808,
-    name: "🦝 Локальный туннель SPIZDILI"
+    name: "🦝 Локальный туннель SPIZDILI (127.0.0.1:10808)"
   },
-  fi: {
+  fi1: {
     scheme: "socks5",
     host: "31.77.202.252",
     port: 10808,
-    name: "🇫🇮 Финляндия • Облако #1"
+    name: "🇫🇮 Финляндия • Облако #1 (cloudflare.com)"
   },
   se: {
     scheme: "socks5",
     host: "84.32.106.178",
     port: 10808,
-    name: "🇸🇪 Швеция • Облако #2"
+    name: "🇸🇪 Швеция • Облако #2 (yandex.net)"
   },
-  de: {
+  fi2: {
     scheme: "socks5",
     host: "31.77.202.252",
     port: 20532,
-    name: "🇩🇪 Германия • Облако #3"
+    name: "🇫🇮 Финляндия • Облако #3 (cloudflare.com)"
   },
   nl: {
     scheme: "socks5",
     host: "50.7.240.210",
     port: 10808,
-    name: "🇳🇱 Нидерланды • Облако #4"
+    name: "🇳🇱 Нидерланды • Облако #4 (samsung.com)"
   },
-  us: {
+  us1: {
     scheme: "socks5",
     host: "45.33.107.60",
     port: 10974,
-    name: "🇺🇸 США • Облако #5"
+    name: "🇺🇸 США • Облако #5 (intel.com)"
+  },
+  us2: {
+    scheme: "socks5",
+    host: "172.233.139.46",
+    port: 53734,
+    name: "🇺🇸 США • Облако #6 (tesla.com)"
+  },
+  us3: {
+    scheme: "socks5",
+    host: "192.155.87.188",
+    port: 10092,
+    name: "🇺🇸 США • Облако #7 (amd.com)"
+  },
+  us4: {
+    scheme: "socks5",
+    host: "172.236.252.35",
+    port: 46645,
+    name: "🇺🇸 США • Облако #8 (sony.com)"
+  },
+  sg: {
+    scheme: "socks5",
+    host: "54.169.200.246",
+    port: 41688,
+    name: "🇸🇬 Сингапур • Облако #9 (intel.com)"
+  },
+  kr: {
+    scheme: "socks5",
+    host: "43.108.86.165",
+    port: 25636,
+    name: "🇰🇷 Корея • Облако #10 (apple.com)"
   }
 };
 
+// ONLY VALID ASCII PUNYCODE - never put raw Cyrillic in rules.bypassList
 const RU_BYPASS_DOMAINS = [
   "*.ru",
-  "*.рф",
   "*.su",
   "*.xn--p1ai",
   "gosuslugi.ru",
@@ -64,7 +94,11 @@ const RU_BYPASS_DOMAINS = [
   "vk.com",
   "*.vk.com",
   "kinopoisk.ru",
-  "*.kinopoisk.ru"
+  "*.kinopoisk.ru",
+  "wildberries.ru",
+  "*.wildberries.ru",
+  "ozon.ru",
+  "*.ozon.ru"
 ];
 
 const DEFAULT_BYPASS = [
@@ -93,7 +127,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (response) {
       isConnected = !!response.connected;
       if (response.activeServer) {
-        // Find matching key
+        // Match active server
         for (const [k, v] of Object.entries(SERVERS)) {
           if (v.host === response.activeServer.host && v.port === response.activeServer.port) {
             serverSelect.value = k;
@@ -108,7 +142,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // Load saved bypass pref
+  // Load saved prefs
   const stored = await chrome.storage.local.get(["bypassRu", "selectedServerKey"]);
   if (stored.bypassRu !== undefined) {
     chkBypassRu.checked = stored.bypassRu;
@@ -122,7 +156,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 serverSelect.addEventListener("change", () => {
   chrome.storage.local.set({ selectedServerKey: serverSelect.value });
   if (isConnected) {
-    // Reconnect with new server
     handleConnect();
   }
 });
@@ -158,11 +191,14 @@ function handleConnect() {
     bypass = bypass.concat(RU_BYPASS_DOMAINS);
   }
 
+  // Ensure pure ASCII
+  const asciiBypass = bypass.filter(item => typeof item === "string" && /^[\x00-\x7F]+$/.test(item.trim()));
+
   chrome.runtime.sendMessage(
     {
       type: "CONNECT",
       server: srv,
-      bypassList: bypass
+      bypassList: asciiBypass
     },
     (resp) => {
       if (resp && resp.success) {

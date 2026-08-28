@@ -1054,6 +1054,71 @@ class MainWindow(Adw.ApplicationWindow):
 
         inner.append(upd_group)
 
+    # ── Updater callbacks ─────────────────────────────────────────────────
+
+    def _on_check_update_clicked(self, _btn=None) -> None:
+        """Manual update check."""
+        if _updater is None:
+            self._show_toast("Модуль обновлений недоступен")
+            return
+        self._upd_check_btn.set_sensitive(False)
+        self._upd_check_btn.set_label("Проверяю…")
+
+        def _check():
+            info = _updater.check_for_update()
+            GLib.idle_add(self._on_update_check_done, info)
+
+        import threading as _th
+        _th.Thread(target=_check, daemon=True).start()
+
+    def _on_update_check_done(self, info) -> None:
+        self._upd_check_btn.set_sensitive(True)
+        self._upd_check_btn.set_label("Проверить сейчас")
+        if info is None:
+            self._show_toast("Обновлений нет — у вас актуальная версия")
+            return
+        # Show update dialog
+        dlg = Adw.MessageDialog(
+            transient_for=self,
+            modal=True,
+            heading=f"Доступно обновление {info['tag']}",
+            body=(info.get("body") or "")[:600] or "Новая версия доступна на GitHub.",
+        )
+        dlg.add_response("cancel", "Позже")
+        dlg.add_response("install", "Установить")
+        dlg.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dlg.connect("response", self._on_update_dialog_response, info)
+        dlg.present()
+
+    def _on_update_dialog_response(self, dlg, response: str, info: dict) -> None:
+        if response != "install" or not info.get("deb_url"):
+            return
+
+        self._show_toast("Скачиваю обновление…")
+
+        def _progress(frac):
+            GLib.idle_add(self._show_toast, f"Скачиваю… {int(frac*100)}%")
+
+        def _done(ok, err):
+            if ok:
+                GLib.idle_add(self._show_toast, "✓ Обновление установлено! Перезапустите приложение.")
+            else:
+                GLib.idle_add(self._show_toast, f"Ошибка установки: {err[:120]}")
+
+        _updater.download_and_install(info["deb_url"], info["deb_name"], _progress, _done)
+
+    def _schedule_auto_update_check(self) -> None:
+        if _updater is None:
+            return
+        def _delayed():
+            import time as _t
+            _t.sleep(5)
+            info = _updater.check_for_update()
+            if info:
+                GLib.idle_add(self._on_update_check_done, info)
+        import threading as _th
+        _th.Thread(target=_delayed, daemon=True).start()
+
     def _on_import_incy_servers_clicked(self, button: Gtk.Button) -> None:
         from incy_importer import IncyImporter
         servers = IncyImporter.to_parsed_servers()

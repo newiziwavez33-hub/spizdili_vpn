@@ -59,7 +59,7 @@ class SpizdiliVPNWinApp:
         self.root.title(f"SPIZDILI_VPN (v {APP_VERSION})")
         self.root.geometry("480x680")
         self.root.minsize(400, 580)
-        self.root.configure(bg="#1e1e2e")
+        self.root.configure(bg="#141226")
 
         self.base_dir = get_base_dir()
         self.xray = WindowsXrayManager(self.base_dir)
@@ -114,37 +114,37 @@ class SpizdiliVPNWinApp:
         self.style = ttk.Style()
         self.style.theme_use("clam")
 
-        # Dark theme colors
-        self.style.configure(".", background="#1e1e2e", foreground="#cdd6f4", font=("Segoe UI", 10))
-        self.style.configure("TLabel", background="#1e1e2e", foreground="#cdd6f4")
-        self.style.configure("Title.TLabel", font=("Segoe UI", 16, "bold"), foreground="#89b4fa")
-        self.style.configure("Sub.TLabel", font=("Segoe UI", 9), foreground="#a6adc8")
-        self.style.configure("Status.TLabel", font=("Segoe UI", 14, "bold"), foreground="#a6adc8")
-        self.style.configure("Header.TLabel", font=("Segoe UI", 18, "bold"), foreground="#ffffff")
-        self.style.configure("Ver.TLabel", font=("Segoe UI", 10, "bold"), foreground="#89b4fa")
-        self.style.configure("Metric.TLabel", font=("Segoe UI", 10), foreground="#a6adc8")
-        self.style.configure("MetricVal.TLabel", font=("Segoe UI", 10, "bold"), foreground="#cdd6f4")
+        # AetherVPN Deep Violet Theme Colors
+        self.style.configure(".", background="#141226", foreground="#f1f5f9", font=("Segoe UI", 10))
+        self.style.configure("TLabel", background="#141226", foreground="#f1f5f9")
+        self.style.configure("Title.TLabel", font=("Segoe UI", 16, "bold"), foreground="#38bdf8")
+        self.style.configure("Sub.TLabel", font=("Segoe UI", 9), foreground="#94a3b8")
+        self.style.configure("Status.TLabel", font=("Segoe UI", 15, "bold"), foreground="#94a3b8")
+        self.style.configure("Header.TLabel", font=("Segoe UI", 19, "bold"), foreground="#ffffff")
+        self.style.configure("Ver.TLabel", font=("Segoe UI", 10, "bold"), foreground="#818cf8")
+        self.style.configure("Metric.TLabel", font=("Segoe UI", 10), foreground="#94a3b8")
+        self.style.configure("MetricVal.TLabel", font=("Segoe UI", 10, "bold"), foreground="#f1f5f9")
 
         # Buttons
         self.style.configure(
             "Connect.TButton",
-            font=("Segoe UI", 12, "bold"),
-            background="#a6e3a1",
-            foreground="#11111b",
-            padding=10,
+            font=("Segoe UI", 13, "bold"),
+            background="#00d2ff",
+            foreground="#0b1329",
+            padding=12,
             borderwidth=0
         )
-        self.style.map("Connect.TButton", background=[("active", "#94e2d5")])
+        self.style.map("Connect.TButton", background=[("active", "#38ef7d")])
 
         self.style.configure(
             "Disconnect.TButton",
-            font=("Segoe UI", 12, "bold"),
-            background="#f38ba8",
-            foreground="#11111b",
-            padding=10,
+            font=("Segoe UI", 13, "bold"),
+            background="#f43f5e",
+            foreground="#ffffff",
+            padding=12,
             borderwidth=0
         )
-        self.style.map("Disconnect.TButton", background=[("active", "#eba0ac")])
+        self.style.map("Disconnect.TButton", background=[("active", "#e11d48")])
 
         self.style.configure(
             "Update.TButton",
@@ -192,7 +192,7 @@ class SpizdiliVPNWinApp:
                 pil_img = Image.open(logo_path).convert("RGBA")
                 pil_img = pil_img.resize((140, 140), Image.Resampling.LANCZOS)
                 self.logo_tk = ImageTk.PhotoImage(pil_img)
-                lbl_logo = tk.Label(container, image=self.logo_tk, bg="#1e1e2e")
+                lbl_logo = tk.Label(container, image=self.logo_tk, bg="#141226")
                 lbl_logo.pack(pady=(0, 10))
             except Exception:
                 pass
@@ -435,7 +435,7 @@ class SpizdiliVPNWinApp:
         modal.title(f"Обновление SPIZDILI_VPN v{info.latest_version}")
         modal.geometry("480x440")
         modal.minsize(420, 380)
-        modal.configure(bg="#1e1e2e")
+        modal.configure(bg="#141226")
         modal.transient(self.root)
         modal.grab_set()
 

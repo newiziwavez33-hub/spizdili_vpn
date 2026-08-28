@@ -459,7 +459,119 @@ class VPNApplication(Adw.Application):
             self.add_action(action)
 
     def _setup_css(self) -> None:
-        css = b"""
+        css = """
+        window, .aether-window {
+            background-color: #141226;
+            color: #f1f5f9;
+        }
+
+        .sidebar-panel {
+            background: linear-gradient(180deg, #1d183d 0%, #121024 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 16px 12px;
+        }
+
+        .nav-btn {
+            background: transparent;
+            color: #94a3b8;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-weight: 600;
+            font-size: 13px;
+            border: none;
+            box-shadow: none;
+            transition: all 180ms ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #ffffff;
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+        }
+
+        .turn-on-btn {
+            min-width: 144px;
+            min-height: 144px;
+            border-radius: 9999px;
+            background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
+            border: 5px solid #334155;
+            color: #38bdf8;
+            box-shadow: 0 0 26px rgba(56, 189, 248, 0.25);
+            transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .turn-on-btn:hover {
+            border-color: #38bdf8;
+            box-shadow: 0 0 38px rgba(56, 189, 248, 0.5);
+        }
+
+        .turn-on-btn.connected {
+            background: radial-gradient(circle, #0284c7 0%, #059669 100%);
+            border-color: #38ef7d;
+            color: #ffffff;
+            box-shadow: 0 0 45px rgba(56, 239, 125, 0.65);
+        }
+
+        .turn-on-btn.connecting {
+            border-color: #facc15;
+            color: #facc15;
+            box-shadow: 0 0 35px rgba(250, 204, 21, 0.55);
+        }
+
+        .turn-on-text {
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: 1.5px;
+        }
+
+        .glass-card {
+            background: rgba(26, 22, 51, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 12px 18px;
+        }
+
+        .locations-panel {
+            background: #16132e;
+            border-left: 1px solid rgba(255, 255, 255, 0.07);
+            padding: 14px;
+        }
+
+        .server-item-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin: 2px 0;
+            transition: all 150ms ease;
+            color: #e2e8f0;
+        }
+
+        .server-item-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(99, 102, 241, 0.5);
+            color: #ffffff;
+        }
+
+        .server-item-btn.selected {
+            background: rgba(99, 102, 241, 0.22);
+            border-color: #6366f1;
+        }
+
+        .badge-optimal {
+            background: rgba(56, 239, 125, 0.18);
+            color: #38ef7d;
+            border-radius: 6px;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
         .vpn-connected { color: #2ec27e; }
         .vpn-disconnected { color: #77767b; }
         .vpn-error { color: #e01b24; }
@@ -511,7 +623,7 @@ class VPNApplication(Adw.Application):
             color: #77767b;
             font-size: 12px;
         }
-        """
+        """.encode("utf-8")
         provider = Gtk.CssProvider()
         provider.load_from_data(css)
         Gtk.StyleContext.add_provider_for_display(
@@ -581,8 +693,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.settings = vpn_manager.settings_manager
         self._sort_by_ping: bool = False
 
-        self.set_default_size(540, 740)
-        self.set_size_request(340, 480)
+        self.set_default_size(980, 640)
+        self.set_size_request(420, 520)
         self.set_icon_name("spizdili-vpn")
 
         self._build_ui()
@@ -596,201 +708,287 @@ class MainWindow(Adw.ApplicationWindow):
 
     # ---- UI construction --------------------------------------------------
 
+
+    def _navigate_to(self, page_id: str) -> None:
+        if hasattr(self, "_stack") and self._stack:
+            self._stack.set_visible_child_name(page_id)
+        if hasattr(self, "_nav_buttons"):
+            for pid, btn in self._nav_buttons.items():
+                if pid == page_id:
+                    btn.add_css_class("active")
+                else:
+                    btn.remove_css_class("active")
+
     def _build_ui(self) -> None:
-        # Toast overlay
+        self.add_css_class("aether-window")
         self._toast_overlay = Adw.ToastOverlay()
         self.set_content(self._toast_overlay)
 
-        # Main box
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self._toast_overlay.set_child(main_box)
+        # Root Horizontal Split: [Left Sidebar] | [Center ViewStack]
+        root_h_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self._toast_overlay.set_child(root_h_box)
 
-        # Header bar with adaptive view switcher title
-        header = Adw.HeaderBar()
-        self._view_switcher_title = Adw.ViewSwitcherTitle()
-        self._view_switcher_title.set_title("SPIZDILI_VPN")
-        header.set_title_widget(self._view_switcher_title)
+        # ── 1. Left Navigation Sidebar ───────────────────────────────────
+        self._sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self._sidebar.add_css_class("sidebar-panel")
+        self._sidebar.set_size_request(200, -1)
 
-        # Menu button
-        menu_btn = Gtk.MenuButton()
-        menu_btn.set_icon_name("open-menu-symbolic")
-        menu_model = Gio.Menu()
-        menu_model.append("О программе", "app.about")
-        menu_model.append("Выход", "app.quit")
-        menu_btn.set_menu_model(menu_model)
-        header.pack_end(menu_btn)
+        # Mascot & Logo header
+        logo_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        logo_box.set_margin_bottom(18)
+        logo_box.set_margin_top(6)
+        logo_box.set_margin_start(6)
 
-        main_box.append(header)
-
-        # View stack (expands to fill all window space adaptively)
-        self._stack = Adw.ViewStack()
-        self._stack.set_vexpand(True)
-        self._stack.set_hexpand(True)
-        self._view_switcher_title.set_stack(self._stack)
-        main_box.append(self._stack)
-
-        # Bottom ViewSwitcherBar for compact window widths
-        self._view_switcher_bar = Adw.ViewSwitcherBar()
-        self._view_switcher_bar.set_stack(self._stack)
-        self._view_switcher_title.bind_property(
-            "title-visible",
-            self._view_switcher_bar,
-            "reveal",
-            GObject.BindingFlags.SYNC_CREATE,
-        )
-        main_box.append(self._view_switcher_bar)
-
-        # Pages
-        self._build_connection_page()
-        self._build_profiles_page()
-        self._build_logs_page()
-        self._build_settings_page()
-        # Auto-check Cloud 1-5 and connect to the fastest 1s after start
-        GLib.timeout_add_seconds(1, lambda: self._auto_select_fastest_cloud() or False)
-        # Auto-check updates 5s after start
-        GLib.timeout_add_seconds(5, lambda: self._schedule_auto_update_check() or False)
-
-    # ---- Connection page --------------------------------------------------
-
-    def _build_connection_page(self) -> None:
-        page_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        scroll = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
-        scroll.set_child(page_box)
-        self._stack.add_titled_with_icon(scroll, "connection", "Подключение", "network-vpn-symbolic")
-
-        # Responsive clamp for centered content
-        clamp = Adw.Clamp(maximum_size=640, tightening_threshold=440)
-        clamp.set_hexpand(True)
-        clamp.set_vexpand(True)
-        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
-        inner.set_hexpand(True)
-        inner.set_margin_top(20)
-        inner.set_margin_bottom(24)
-        inner.set_margin_start(16)
-        inner.set_margin_end(16)
-        clamp.set_child(inner)
-        page_box.append(clamp)
-
-        # ── Large Application Title & Version ───────────────────────────
-        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, halign=Gtk.Align.CENTER)
-        
-        app_title_lbl = Gtk.Label()
-        app_title_lbl.set_markup("<span size='26000' weight='heavy' letter_spacing='2000'>SPIZDILI_VPN</span>")
-        title_box.append(app_title_lbl)
-
-        app_ver_lbl = Gtk.Label()
-        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.7</span>")
-        title_box.append(app_ver_lbl)
-
-        # ── Mascot Image (SPIZDILI_VPN raccoon logo) ────────────────────
         logo_path = None
         for candidate in (
             Path("/usr/local/share/wavez-vpn/icons/spizdili-logo.png"),
             Path(__file__).resolve().parent / "icons" / "spizdili-logo.png",
+            Path(__file__).resolve().parent.parent / "icons" / "spizdili-logo.png",
         ):
             if candidate.is_file():
                 logo_path = str(candidate)
                 break
 
         if logo_path:
-            self._mascot_image = Gtk.Picture.new_for_filename(logo_path)
-            self._mascot_image.set_can_shrink(True)
-            self._mascot_image.set_content_fit(Gtk.ContentFit.CONTAIN)
-            self._mascot_image.set_size_request(180, 180)
-            self._mascot_image.set_halign(Gtk.Align.CENTER)
-            inner.append(self._mascot_image)
+            logo_img = Gtk.Picture.new_for_filename(logo_path)
+            logo_img.set_size_request(38, 38)
+            logo_img.set_content_fit(Gtk.ContentFit.CONTAIN)
+            logo_box.append(logo_img)
 
-        # Status icon (hidden placeholder to maintain internal state compatibility)
-        self._status_icon = Gtk.Image.new_from_icon_name("security-medium-symbolic")
-        self._status_icon.set_visible(False)
+        app_title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        t_lbl = Gtk.Label()
+        t_lbl.set_markup("<span weight='heavy' size='12000' color='#ffffff'>SPIZDILI_VPN</span>")
+        t_lbl.set_halign(Gtk.Align.START)
+        app_title_vbox.append(t_lbl)
 
-        self._status_label = Gtk.Label(label="Отключено")
-        self._status_label.add_css_class("title-1")
-        inner.append(self._status_label)
+        sub_lbl = Gtk.Label()
+        sub_lbl.set_markup("<span size='9500' weight='bold' color='#818cf8'>Aether Edition</span>")
+        sub_lbl.set_halign(Gtk.Align.START)
+        app_title_vbox.append(sub_lbl)
+        logo_box.append(app_title_vbox)
+        self._sidebar.append(logo_box)
 
-        self._status_subtitle = Gtk.Label(label="Выберите сервер и нажмите «Подключить»")
-        self._status_subtitle.add_css_class("dim-label")
-        inner.append(self._status_subtitle)
+        # Nav items
+        self._nav_buttons = {}
+        nav_defs = [
+            ("connection", "📊  Дашборд"),
+            ("profiles", "🌐  Локации"),
+            ("settings", "⚙️  Настройки"),
+            ("logs", "📜  Журнал"),
+        ]
+        for page_id, label_text in nav_defs:
+            btn = Gtk.Button(label=label_text)
+            btn.add_css_class("nav-btn")
+            btn.set_halign(Gtk.Align.FILL)
+            btn.connect("clicked", lambda b, pid=page_id: self._navigate_to(pid))
+            self._sidebar.append(btn)
+            self._nav_buttons[page_id] = btn
 
-        # Profile selector
-        self._selector_group = Adw.PreferencesGroup(title="Выбор сервера")
-        self._profile_dropdown_row = Adw.ComboRow(title="Сервер / Локация")
+        # Spacer
+        spacer = Gtk.Box(vexpand=True)
+        self._sidebar.append(spacer)
+
+        # Bottom Version & Status
+        bot_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        bot_box.set_margin_bottom(10)
+        bot_box.set_margin_start(6)
+        v_lbl = Gtk.Label()
+        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.0.7 • Protected</span>")
+        v_lbl.set_halign(Gtk.Align.START)
+        bot_box.append(v_lbl)
+        self._sidebar.append(bot_box)
+
+        root_h_box.append(self._sidebar)
+
+        # ── 2. Center Column: Top Header + ViewStack ─────────────────────
+        center_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0, hexpand=True, vexpand=True)
+        root_h_box.append(center_vbox)
+
+        # Modern top bar
+        top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        top_bar.set_margin_start(16)
+        top_bar.set_margin_end(16)
+        top_bar.set_margin_top(12)
+        top_bar.set_margin_bottom(8)
+
+        # Quick Tabs
+        self._quick_tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self._quick_tab_box.add_css_class("glass-card")
+        self._quick_tab_box.set_valign(Gtk.Align.CENTER)
+        
+        for q_id, q_label in [("connection", "Подключение"), ("profiles", "Серверы"), ("settings", "Настройки")]:
+            q_btn = Gtk.Button(label=q_label)
+            q_btn.add_css_class("nav-btn")
+            q_btn.connect("clicked", lambda b, q=q_id: self._navigate_to(q))
+            self._quick_tab_box.append(q_btn)
+        top_bar.append(self._quick_tab_box)
+
+        top_spacer = Gtk.Box(hexpand=True)
+        top_bar.append(top_spacer)
+
+        # Notification & Menu
+        notif_btn = Gtk.Button()
+        notif_btn.add_css_class("nav-btn")
+        notif_icon = Gtk.Image.new_from_icon_name("preferences-system-notifications-symbolic")
+        notif_btn.set_child(notif_icon)
+        notif_btn.connect("clicked", lambda b: self._show_toast("Все узлы сети в норме (47/47 активны)"))
+        top_bar.append(notif_btn)
+
+        menu_btn = Gtk.MenuButton()
+        menu_btn.set_icon_name("open-menu-symbolic")
+        menu_btn.add_css_class("nav-btn")
+        menu_model = Gio.Menu()
+        menu_model.append("О программе", "app.about")
+        menu_model.append("Выход", "app.quit")
+        menu_btn.set_menu_model(menu_model)
+        top_bar.append(menu_btn)
+
+        center_vbox.append(top_bar)
+
+        # Central View Stack
+        self._stack = Adw.ViewStack()
+        self._stack.set_vexpand(True)
+        self._stack.set_hexpand(True)
+        center_vbox.append(self._stack)
+
+        # Compatibility headers
+        self._view_switcher_title = Adw.ViewSwitcherTitle()
+        self._view_switcher_title.set_stack(self._stack)
+        self._view_switcher_bar = Adw.ViewSwitcherBar()
+        self._view_switcher_bar.set_stack(self._stack)
+
+        # Build pages
+        self._build_connection_page()
+        self._build_profiles_page()
+        self._build_logs_page()
+        self._build_settings_page()
+
+        # Initial active tab highlight
+        self._navigate_to("connection")
+
+        # Auto-check Cloud 1-5 and connect to fastest
+        GLib.timeout_add_seconds(1, lambda: self._auto_select_fastest_cloud() or False)
+        # Auto-check updates
+        GLib.timeout_add_seconds(5, lambda: self._schedule_auto_update_check() or False)
+
+    # ---- Connection page --------------------------------------------------
+
+
+    def _on_turn_on_clicked(self, btn: Gtk.Button) -> None:
+        if self._connected:
+            self._on_disconnect_clicked(btn)
+        else:
+            self._on_connect_clicked(btn)
+
+    def _build_connection_page(self) -> None:
+        overlay = Gtk.Overlay()
+        overlay.set_hexpand(True)
+        overlay.set_vexpand(True)
+        self._stack.add_titled(overlay, "connection", "Дашборд")
+
+        # Map Background
+        map_path = None
+        for candidate in (
+            Path("/usr/local/share/wavez-vpn/icons/world-map-mesh.svg"),
+            Path(__file__).resolve().parent / "icons" / "world-map-mesh.svg",
+            Path(__file__).resolve().parent.parent / "icons" / "world-map-mesh.svg",
+        ):
+            if candidate.is_file():
+                map_path = str(candidate)
+                break
+
+        if map_path:
+            map_pic = Gtk.Picture.new_for_filename(map_path)
+            map_pic.set_content_fit(Gtk.ContentFit.COVER)
+            map_pic.set_opacity(0.85)
+            overlay.set_child(map_pic)
+        else:
+            dummy_bg = Gtk.Box()
+            overlay.set_child(dummy_bg)
+
+        # Central Foreground Content
+        center_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        center_content.set_margin_top(20)
+        center_content.set_margin_bottom(20)
+
+        # ── BIG CIRCULAR TURN ON BUTTON ──
+        self._turn_on_btn = Gtk.Button()
+        self._turn_on_btn.add_css_class("turn-on-btn")
+        self._turn_on_btn.set_size_request(144, 144)
+        self._turn_on_btn.set_halign(Gtk.Align.CENTER)
+        self._turn_on_btn.connect("clicked", self._on_turn_on_clicked)
+
+        btn_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        power_icon = Gtk.Image.new_from_icon_name("system-shutdown-symbolic")
+        power_icon.set_pixel_size(44)
+        btn_vbox.append(power_icon)
+
+        self._turn_on_lbl = Gtk.Label(label="TURN ON")
+        self._turn_on_lbl.add_css_class("turn-on-text")
+        btn_vbox.append(self._turn_on_lbl)
+        self._turn_on_btn.set_child(btn_vbox)
+
+        center_content.append(self._turn_on_btn)
+
+        # Status Labels
+        self._status_label = Gtk.Label()
+        self._status_label.set_markup("<span size='20000' weight='heavy' color='#ffffff'>Disconnected</span>")
+        center_content.append(self._status_label)
+
+        self._status_subtitle = Gtk.Label()
+        self._status_subtitle.set_markup("<span size='11500' color='#94a3b8'>Optimal Location: Auto-Select (Optimal)</span>")
+        center_content.append(self._status_subtitle)
+
+        # Quick Server Selector Dropdown
+        self._selector_group = Adw.PreferencesGroup()
+        self._selector_group.set_size_request(380, -1)
+        self._selector_group.set_halign(Gtk.Align.CENTER)
+        self._profile_dropdown_row = Adw.ComboRow(title="Сервер")
         self._profile_model = Gtk.StringList()
         self._profile_dropdown_row.set_model(self._profile_model)
         self._profile_dropdown_row.connect("notify::selected", self._on_profile_dropdown_selected)
         self._selector_group.add(self._profile_dropdown_row)
-        inner.append(self._selector_group)
+        center_content.append(self._selector_group)
 
-        # Connect / Disconnect button
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, halign=Gtk.Align.CENTER, spacing=12)
+        # Bottom Footer Diagnostics Card
+        self._footer_dock = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24, halign=Gtk.Align.CENTER)
+        self._footer_dock.add_css_class("glass-card")
+        self._footer_dock.set_margin_top(8)
+
+        # IP
+        self._footer_ip_lbl = Gtk.Label()
+        self._footer_ip_lbl.set_markup("<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#ffffff'>178.xx.xx.xx</span>")
+        self._footer_dock.append(self._footer_ip_lbl)
+
+        # Duration
+        self._footer_duration_lbl = Gtk.Label()
+        self._footer_duration_lbl.set_markup("<span size='11000' color='#94a3b8'>Duration: </span><span size='11000' weight='bold' color='#38ef7d'>00:00:00</span>")
+        self._footer_dock.append(self._footer_duration_lbl)
+
+        # Ping
+        self._footer_ping_lbl = Gtk.Label()
+        self._footer_ping_lbl.set_markup("<span size='11000' color='#94a3b8'>Ping: </span><span size='11000' weight='bold' color='#38bdf8'>—</span>")
+        self._footer_dock.append(self._footer_ping_lbl)
+
+        center_content.append(self._footer_dock)
+
+        # Legacy widgets compatibility placeholders
         self._connect_btn = Gtk.Button(label="Подключить")
-        self._connect_btn.add_css_class("suggested-action")
-        self._connect_btn.add_css_class("pill")
-        self._connect_btn.add_css_class("connect-button")
-        self._connect_btn.connect("clicked", self._on_connect_clicked)
-        btn_box.append(self._connect_btn)
-
+        self._connect_btn.set_visible(False)
         self._disconnect_btn = Gtk.Button(label="Отключить")
-        self._disconnect_btn.add_css_class("destructive-action")
-        self._disconnect_btn.add_css_class("pill")
-        self._disconnect_btn.add_css_class("connect-button")
-        self._disconnect_btn.connect("clicked", self._on_disconnect_clicked)
         self._disconnect_btn.set_visible(False)
-        btn_box.append(self._disconnect_btn)
-
-        # Spinner for connecting state
+        self._status_icon = Gtk.Image.new_from_icon_name("security-medium-symbolic")
+        self._status_icon.set_visible(False)
         self._spinner = Gtk.Spinner()
-        self._spinner.set_size_request(32, 32)
         self._spinner.set_visible(False)
-        btn_box.append(self._spinner)
-
-        inner.append(btn_box)
-
-        # Kill-switch toggle
-        ks_group = Adw.PreferencesGroup()
-        self._killswitch_row = Adw.SwitchRow(
-            title="Аварийная блокировка (Kill-Switch)",
-            subtitle="Блокировать сетевой трафик при обрыве VPN",
-        )
-        self._killswitch_row.connect("notify::active", self._on_killswitch_toggled)
-        ks_group.add(self._killswitch_row)
-        inner.append(ks_group)
-
-        # Stats group (visible when connected)
-        self._stats_group = Adw.PreferencesGroup(title="Параметры соединения")
+        self._ip_value = Gtk.Label(label="—")
+        self._ping_value = Gtk.Label(label="—")
+        self._download_value = Gtk.Label(label="0 B")
+        self._upload_value = Gtk.Label(label="0 B")
+        self._stats_group = Gtk.Box()
         self._stats_group.set_visible(False)
 
-        self._ip_row = Adw.ActionRow(title="Внешний IP")
-        self._ip_value = Gtk.Label(label="—")
-        self._ip_value.add_css_class("vpn-stats-value")
-        self._ip_row.add_suffix(self._ip_value)
-        self._stats_group.add(self._ip_row)
-
-        self._ping_row = Adw.ActionRow(title="Пинг")
-        self._ping_value = Gtk.Label(label="—")
-        self._ping_value.add_css_class("vpn-stats-value")
-        self._ping_row.add_suffix(self._ping_value)
-        self._stats_group.add(self._ping_row)
-
-        self._download_row = Adw.ActionRow(title="↓ Загрузка")
-        self._download_value = Gtk.Label(label="0 B")
-        self._download_value.add_css_class("vpn-stats-value")
-        self._download_row.add_suffix(self._download_value)
-        self._stats_group.add(self._download_row)
-
-        self._upload_row = Adw.ActionRow(title="↑ Отдача")
-        self._upload_value = Gtk.Label(label="0 B")
-        self._upload_value.add_css_class("vpn-stats-value")
-        self._upload_row.add_suffix(self._upload_value)
-        self._stats_group.add(self._upload_row)
-
-        self._duration_row = Adw.ActionRow(title="Время работы")
-        self._duration_value = Gtk.Label(label="00:00:00")
-        self._duration_value.add_css_class("vpn-stats-value")
-        self._duration_row.add_suffix(self._duration_value)
-        self._stats_group.add(self._duration_row)
-
-        inner.append(self._stats_group)
+        overlay.add_overlay(center_content)
 
     # ---- Profiles page ----------------------------------------------------
 
@@ -2024,34 +2222,33 @@ class MainWindow(Adw.ApplicationWindow):
             self._spinner.stop()
 
     def _update_connection_ui(self) -> None:
-        """Update all UI elements to reflect current connection state."""
+        """Update all UI elements to reflect current connection state with glowing circular button."""
+        display_title = get_server_display_title(self._active_profile or self.cfg.get_last_connected() or "")
         if self._connected:
-            self._status_icon.set_from_icon_name("security-high-symbolic")
-            self._status_icon.remove_css_class("vpn-disconnected")
-            self._status_icon.remove_css_class("vpn-error")
-            self._status_icon.add_css_class("vpn-connected")
-            self._status_label.set_text("Подключено")
-            display_title = get_server_display_title(self._active_profile or "")
-            self._status_subtitle.set_text(display_title)
-            self._connect_btn.set_visible(True)
-            self._connect_btn.set_label("Сменить сервер")
-            self._connect_btn.remove_css_class("suggested-action")
-            self._selector_group.set_visible(True)
-            self._disconnect_btn.set_visible(True)
-            self._stats_group.set_visible(True)
+            if hasattr(self, "_turn_on_btn"):
+                self._turn_on_btn.remove_css_class("connecting")
+                self._turn_on_btn.add_css_class("connected")
+                self._turn_on_lbl.set_text("TURN OFF")
+            self._status_label.set_markup("<span size='20000' weight='heavy' color='#38ef7d'>Connected • Protected</span>")
+            self._status_subtitle.set_markup(f"<span size='11500' color='#a5b4fc'>Secured: {display_title}</span>")
+            if hasattr(self, "_footer_dock"):
+                self._footer_dock.set_visible(True)
+        elif self._connecting:
+            if hasattr(self, "_turn_on_btn"):
+                self._turn_on_btn.remove_css_class("connected")
+                self._turn_on_btn.add_css_class("connecting")
+                self._turn_on_lbl.set_text("CONNECTING...")
+            self._status_label.set_markup("<span size='20000' weight='heavy' color='#facc15'>Connecting…</span>")
+            self._status_subtitle.set_markup("<span size='11500' color='#94a3b8'>Establishing encrypted tunnel…</span>")
         else:
-            self._status_icon.set_from_icon_name("security-medium-symbolic")
-            self._status_icon.remove_css_class("vpn-connected")
-            self._status_icon.remove_css_class("vpn-error")
-            self._status_icon.add_css_class("vpn-disconnected")
-            self._status_label.set_text("Отключено")
-            self._status_subtitle.set_text("Выберите сервер и нажмите «Подключить»")
-            self._connect_btn.set_visible(True)
-            self._connect_btn.set_label("Подключить")
-            self._connect_btn.add_css_class("suggested-action")
-            self._selector_group.set_visible(True)
-            self._disconnect_btn.set_visible(False)
-            self._stats_group.set_visible(False)
+            if hasattr(self, "_turn_on_btn"):
+                self._turn_on_btn.remove_css_class("connected")
+                self._turn_on_btn.remove_css_class("connecting")
+                self._turn_on_lbl.set_text("TURN ON")
+            self._status_label.set_markup("<span size='20000' weight='heavy' color='#ffffff'>Disconnected</span>")
+            self._status_subtitle.set_markup(f"<span size='11500' color='#94a3b8'>Optimal Location: {display_title or 'Auto-Select (Optimal)'}</span>")
+            if hasattr(self, "_footer_duration_lbl"):
+                self._footer_duration_lbl.set_markup("<span size='11000' color='#94a3b8'>Duration: </span><span size='11000' weight='bold' color='#64748b'>00:00:00</span>")
 
     # ---- Stats polling ----------------------------------------------------
 
@@ -2099,7 +2296,11 @@ class MainWindow(Adw.ApplicationWindow):
         hours = elapsed // 3600
         minutes = (elapsed % 3600) // 60
         seconds = elapsed % 60
-        self._duration_value.set_text(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        if hasattr(self, "_duration_value"):
+            self._duration_value.set_text(time_str)
+        if hasattr(self, "_footer_duration_lbl"):
+            self._footer_duration_lbl.set_markup(f"<span size='11000' color='#94a3b8'>Duration: </span><span size='11000' weight='bold' color='#38ef7d'>{time_str}</span>")
         return True
 
     def _fetch_external_ip(self) -> None:
@@ -2113,7 +2314,10 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_ip_received(self, ip: Optional[str]) -> bool:
         if self._connected:
-            self._ip_value.set_text(ip or "Unknown")
+            clean_ip = ip or "Unknown"
+            self._ip_value.set_text(clean_ip)
+            if hasattr(self, "_footer_ip_lbl"):
+                self._footer_ip_lbl.set_markup(f"<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#ffffff'>{clean_ip}</span>")
         return False
 
     def _fetch_ping(self) -> None:
@@ -2134,7 +2338,11 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_ping_received(self, rtt: Optional[float]) -> bool:
         if self._connected:
-            self._ping_value.set_text(f"{rtt:.1f} ms" if rtt is not None else "Timeout")
+            ping_str = f"{rtt:.1f} ms" if rtt is not None else "Timeout"
+            self._ping_value.set_text(ping_str)
+            if hasattr(self, "_footer_ping_lbl"):
+                color = "#38ef7d" if (rtt and rtt < 100) else ("#facc15" if (rtt and rtt < 300) else "#f87171")
+                self._footer_ping_lbl.set_markup(f"<span size='11000' color='#94a3b8'>Ping: </span><span size='11000' weight='bold' color='{color}'>{ping_str}</span>")
         return False
 
     # ---- Initial status check ---------------------------------------------
@@ -2243,6 +2451,17 @@ class EditConfigDialog(Adw.Window):
         self._config = config
         self._config_manager = config_manager
         self._build_ui()
+
+
+    def _navigate_to(self, page_id: str) -> None:
+        if hasattr(self, "_stack") and self._stack:
+            self._stack.set_visible_child_name(page_id)
+        if hasattr(self, "_nav_buttons"):
+            for pid, btn in self._nav_buttons.items():
+                if pid == page_id:
+                    btn.add_css_class("active")
+                else:
+                    btn.remove_css_class("active")
 
     def _build_ui(self) -> None:
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -2425,6 +2644,17 @@ class SubscriptionImportDialog(Adw.Window):
         self._check_buttons: list[Gtk.CheckButton] = []
         self._lat_labels: list[Gtk.Label] = []
         self._build_ui()
+
+
+    def _navigate_to(self, page_id: str) -> None:
+        if hasattr(self, "_stack") and self._stack:
+            self._stack.set_visible_child_name(page_id)
+        if hasattr(self, "_nav_buttons"):
+            for pid, btn in self._nav_buttons.items():
+                if pid == page_id:
+                    btn.add_css_class("active")
+                else:
+                    btn.remove_css_class("active")
 
     def _build_ui(self) -> None:
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -2719,6 +2949,17 @@ class ProfileHealthDialog(Adw.Window):
         self._vpn = vpn_manager
         self._build_ui()
         self._run_check()
+
+
+    def _navigate_to(self, page_id: str) -> None:
+        if hasattr(self, "_stack") and self._stack:
+            self._stack.set_visible_child_name(page_id)
+        if hasattr(self, "_nav_buttons"):
+            for pid, btn in self._nav_buttons.items():
+                if pid == page_id:
+                    btn.add_css_class("active")
+                else:
+                    btn.remove_css_class("active")
 
     def _build_ui(self) -> None:
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)

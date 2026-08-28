@@ -1,7 +1,7 @@
 """Version information for SPIZDILI_VPN."""
 
 APP_NAME = "SPIZDILI_VPN"
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 __version__ = APP_VERSION
 
 GITHUB_OWNER = "newiziwavez33-hub"

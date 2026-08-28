@@ -104,7 +104,11 @@ def _on_unix_signal(signum: int) -> bool:
 def main() -> int:
     """Application entry point. Returns exit code."""
     _configure_logging()
-    logger.info("SPIZDILI_VPN v1.0.3 starting…")
+    try:
+        from version import APP_VERSION
+    except ImportError:
+        APP_VERSION = "1.0.5"
+    logger.info("SPIZDILI_VPN v%s starting…", APP_VERSION)
 
     # --- Dependency check ---
     missing = SystemDependencyChecker.get_missing()

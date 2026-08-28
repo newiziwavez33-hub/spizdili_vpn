@@ -40,6 +40,11 @@ try:
 except ImportError:
     _updater = None  # type: ignore
 
+try:
+    from version import APP_VERSION
+except ImportError:
+    APP_VERSION = "1.0.6"
+
 __all__ = ["VPNApplication"]
 
 # Locate the tray subprocess module
@@ -256,6 +261,8 @@ _COUNTRY_FLAGS = (
     ("сша", "🇺🇸"),
     ("япони", "🇯🇵"),
     ("коре", "🇰🇷"),
+    ("сингапур", "🇸🇬"),
+    ("singapore", "🇸🇬"),
     ("казахстан", "🇰🇿"),
     ("оаэ", "🇦🇪"),
     ("екатеринбург", "🇷🇺"),
@@ -490,7 +497,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.5)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.6)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -607,7 +614,7 @@ class MainWindow(Adw.ApplicationWindow):
         title_box.append(app_title_lbl)
 
         app_ver_lbl = Gtk.Label()
-        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.5</span>")
+        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.6</span>")
         title_box.append(app_ver_lbl)
 
         # ── Mascot Image (SPIZDILI_VPN raccoon logo) ────────────────────

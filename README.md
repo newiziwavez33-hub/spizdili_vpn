@@ -56,7 +56,7 @@
 
 ```bash
 # Клонируйте репозиторий
-git clone https://github.com/<YOUR_USERNAME>/spizdili_vpn.git
+git clone https://github.com/newiziwavez33-hub/spizdili_vpn.git
 cd spizdili_vpn
 
 # Запустите автономную установку

@@ -1,0 +1,1128 @@
+#!/usr/bin/env python3
+"""Ubuntu VPN Client — Privileged Helper.
+
+This script is executed via pkexec (Polkit) and performs network operations
+that require root privileges: WireGuard tunnel management, iptables kill-switch,
+and DNS configuration via resolvectl.
+
+All input is strictly validated. All output is JSON on stdout.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import json
+import os
+import re
+import subprocess
+import sys
+import syslog
+import time
+from pathlib import Path
+from typing import Any, Optional
+
+# ---------------------------------------------------------------------------
+# Constants & validation patterns
+# ---------------------------------------------------------------------------
+
+IFACE_RE = re.compile(r"^[a-zA-Z0-9_-]{1,15}$")
+CONF_EXT_RE = re.compile(r"\.conf$")
+TRANSFER_RE = re.compile(
+    r"([\d.]+)\s+(B|KiB|MiB|GiB|TiB)\s+received,\s+([\d.]+)\s+(B|KiB|MiB|GiB|TiB)\s+sent"
+)
+HANDSHAKE_RE = re.compile(
+    r"(\d+)\s+(second|minute|hour|day)s?\s*(?:,\s*(\d+)\s+(second|minute|hour|day)s?)?\s*ago"
+)
+KILLSWITCH_CHAIN = "VPN_KILLSWITCH"
+ALLOWED_CONFIG_DIRS = ["/home", "/tmp", "/root"]
+
+UNIT_MULTIPLIERS = {
+    "B": 1,
+    "KiB": 1024,
+    "MiB": 1024 ** 2,
+    "GiB": 1024 ** 3,
+    "TiB": 1024 ** 4,
+}
+
+TIME_MULTIPLIERS = {
+    "second": 1,
+    "minute": 60,
+    "hour": 3600,
+    "day": 86400,
+}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def output_json(data: dict[str, Any]) -> None:
+    """Print JSON to stdout and flush."""
+    print(json.dumps(data), flush=True)
+
+
+def output_success(**kwargs: Any) -> None:
+    """Output a success JSON response."""
+    output_json({"success": True, **kwargs})
+
+
+def output_error(message: str) -> None:
+    """Output an error JSON response."""
+    syslog.syslog(syslog.LOG_ERR, f"vpn-helper error: {message}")
+    output_json({"success": False, "error": message})
+
+
+def log_info(message: str) -> None:
+    """Log informational message to syslog."""
+    syslog.syslog(syslog.LOG_INFO, f"vpn-helper: {message}")
+
+
+def validate_interface(name: str) -> bool:
+    """Validate a WireGuard interface name."""
+    return bool(IFACE_RE.match(name))
+
+
+def derive_interface_name(stem: str) -> str:
+    """Derive a valid Linux network interface name (max 15 ASCII characters)."""
+    # If already a valid ASCII interface name, return it
+    clean_ascii = stem[:15]
+    if IFACE_RE.match(clean_ascii):
+        return clean_ascii
+
+    # Transliterate Cyrillic to ASCII Latin
+    translit_map = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+        'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+        'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+        'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+        'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+    }
+    translit: list[str] = []
+    for ch in stem.lower():
+        if ch in translit_map:
+            translit.append(translit_map[ch])
+        elif ch in "abcdefghijklmnopqrstuvwxyz0123456789_-":
+            translit.append(ch)
+
+    cand = "".join(translit)
+    cand = re.sub(r'[-_]+', '-', cand).strip('-_')
+    if len(cand) >= 2 and IFACE_RE.match(cand[:15]):
+        return cand[:15]
+
+    # Fallback to deterministic hash if transliteration failed
+    h = hashlib.md5(stem.encode('utf-8', errors='replace')).hexdigest()[:8]
+    return f"wg_{h}"
+
+
+def validate_ip(addr: str) -> bool:
+    """Validate an IPv4 or IPv6 address."""
+    try:
+        ipaddress.ip_address(addr)
+        return True
+    except ValueError:
+        return False
+
+
+def validate_config_path(path_str: str) -> Optional[Path]:
+    """Validate and resolve a config file path.
+
+    Returns resolved Path or None if invalid.
+    """
+    if ".." in path_str:
+        return None
+    path = Path(path_str).resolve()
+    if not path.is_file():
+        return None
+    if not path.suffix == ".conf":
+        return None
+    # Must be under an allowed directory
+    path_s = str(path)
+    if not any(path_s.startswith(d) for d in ALLOWED_CONFIG_DIRS):
+        return None
+    return path
+
+
+def run_cmd(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:
+    """Run a command without shell, capturing output."""
+    return subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def check_binary(name: str) -> bool:
+    """Check if a binary is available in PATH."""
+    try:
+        result = subprocess.run(
+            ["which", name], capture_output=True, text=True, timeout=5
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def interface_exists(name: str) -> bool:
+    """Check if a network interface exists."""
+    try:
+        result = run_cmd(["ip", "link", "show", name])
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def parse_transfer_value(value_str: str, unit: str) -> int:
+    """Convert a human-readable transfer value to bytes."""
+    try:
+        value = float(value_str)
+        multiplier = UNIT_MULTIPLIERS.get(unit, 1)
+        return int(value * multiplier)
+    except (ValueError, TypeError):
+        return 0
+
+
+def parse_handshake_ago(text: str) -> int:
+    """Parse 'X minutes, Y seconds ago' to epoch timestamp."""
+    match = HANDSHAKE_RE.search(text)
+    if not match:
+        return 0
+    seconds_ago = 0
+    val1 = int(match.group(1))
+    unit1 = match.group(2)
+    seconds_ago += val1 * TIME_MULTIPLIERS.get(unit1, 1)
+    if match.group(3) and match.group(4):
+        val2 = int(match.group(3))
+        unit2 = match.group(4)
+        seconds_ago += val2 * TIME_MULTIPLIERS.get(unit2, 1)
+    return int(time.time()) - seconds_ago
+
+
+# ---------------------------------------------------------------------------
+# Command: up
+# ---------------------------------------------------------------------------
+
+
+# Standard WireGuard keys accepted by wireguard-tools.
+_WG_INTERFACE_KEYS = frozenset({
+    "privatekey", "listenport", "address", "dns", "mtu",
+    "preup", "postup", "predown", "postdown", "table", "fwmark",
+    "saveconfig",
+})
+_AWG_EXTRA_KEYS = frozenset({
+    "jc", "jmin", "jmax", "s1", "s2", "h1", "h2", "h3", "h4",
+})
+_AWG_INTERFACE_KEYS = _WG_INTERFACE_KEYS | _AWG_EXTRA_KEYS
+
+_WG_PEER_KEYS = frozenset({
+    "publickey", "presharedkey", "allowedips", "endpoint",
+    "persistentkeepalive",
+})
+
+
+def _sanitize_wg_conf(text: str, preserve_amnezia: bool = False) -> tuple[str, bool]:
+    """Sanitize WireGuard/AmneziaWG config.
+
+    Returns (sanitized_conf_text, has_amnezia_params).
+    """
+    out_lines: list[str] = []
+    current_section: str = ""  # "interface" | "peer" | ""
+    has_amnezia = False
+
+    allowed_iface_keys = _AWG_INTERFACE_KEYS if preserve_amnezia else _WG_INTERFACE_KEYS
+
+    for line in text.splitlines():
+        stripped = line.strip()
+
+        # Blank lines and comments always pass through
+        if not stripped or stripped.startswith("#") or stripped.startswith(";"):
+            out_lines.append(line)
+            continue
+
+        # Section headers
+        if stripped.startswith("["):
+            header = stripped.lower().strip("[]")
+            current_section = header
+            out_lines.append(line)
+            continue
+
+        # Key = Value lines
+        if "=" in stripped:
+            key = stripped.split("=", 1)[0].strip().lower()
+            if key in _AWG_EXTRA_KEYS:
+                has_amnezia = True
+
+            if current_section == "interface":
+                if key in allowed_iface_keys:
+                    out_lines.append(line)
+                else:
+                    log_info(f"Stripping non-standard [Interface] key: {key}")
+            elif current_section == "peer":
+                if key in _WG_PEER_KEYS:
+                    out_lines.append(line)
+                else:
+                    log_info(f"Stripping non-standard [Peer] key: {key}")
+            else:
+                out_lines.append(line)
+        else:
+            out_lines.append(line)
+
+    return "\n".join(out_lines) + "\n", has_amnezia
+
+
+def cmd_up(args: list[str]) -> None:
+    """Bring up a WireGuard or AmneziaWG interface from a config file."""
+    if len(args) < 1:
+        output_error("Usage: up <config_path>")
+        return
+
+    config_path = validate_config_path(args[0])
+    if config_path is None:
+        output_error(f"Invalid or inaccessible config path: {args[0]}")
+        return
+
+    has_awg_tool = check_binary("awg-quick")
+    has_wg_tool = check_binary("wg-quick")
+
+    if not has_wg_tool and not has_awg_tool:
+        output_error("Neither wg-quick nor awg-quick is installed.")
+        return
+
+    interface = derive_interface_name(config_path.stem)
+    if not validate_interface(interface):
+        output_error(f"Invalid interface name derived from config: {interface}")
+        return
+
+    # Check existing interface tool
+    tool_file = Path("/etc/wireguard") / f"{interface}.tool"
+
+    # If interface already exists, bring it down first
+    if interface_exists(interface):
+        log_info(f"Interface {interface} already exists, bringing down first")
+        prev_tool = "wg-quick"
+        if tool_file.exists():
+            try:
+                prev_tool = tool_file.read_text().strip() or "wg-quick"
+            except OSError:
+                pass
+        staged_existing = Path("/etc/wireguard") / f"{interface}.conf"
+        if staged_existing.exists() and check_binary(prev_tool):
+            try:
+                run_cmd([prev_tool, "down", interface])
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+        else:
+            # No config file — remove directly
+            try:
+                run_cmd(["ip", "link", "delete", interface], timeout=10)
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+
+    wg_dir = Path("/etc/wireguard")
+    wg_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    staged_conf = wg_dir / f"{interface}.conf"
+    backup_path = None
+    if staged_conf.exists():
+        backup_path = wg_dir / f"{interface}.conf.bak"
+        try:
+            backup_path.write_text(
+                staged_conf.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+        except OSError:
+            backup_path = None
+
+    try:
+        raw = config_path.read_text(encoding="utf-8")
+        # Check if config has Amnezia keys and if awg-quick is available
+        sanitized, has_awg_keys = _sanitize_wg_conf(raw, preserve_amnezia=has_awg_tool)
+        staged_conf.write_text(sanitized, encoding="utf-8")
+        os.chmod(str(staged_conf), 0o600)
+    except OSError as exc:
+        output_error(f"Failed to stage config to {wg_dir}: {exc}")
+        return
+
+    # Choose tool
+    active_tool = "awg-quick" if (has_awg_keys and has_awg_tool) else "wg-quick"
+    if not check_binary(active_tool):
+        active_tool = "wg-quick" if has_wg_tool else "awg-quick"
+
+    # Record active tool for teardown
+    try:
+        tool_file.write_text(active_tool, encoding="utf-8")
+        os.chmod(str(tool_file), 0o600)
+    except OSError:
+        pass
+
+    log_info(f"Bringing up interface {interface} using {active_tool} from {staged_conf}")
+    try:
+        result = run_cmd([active_tool, "up", str(staged_conf)], timeout=30)
+    except subprocess.TimeoutExpired:
+        _cleanup_staged(staged_conf, backup_path, tool_file)
+        output_error(f"{active_tool} up timed out after 30 seconds")
+        return
+    except FileNotFoundError:
+        _cleanup_staged(staged_conf, backup_path, tool_file)
+        output_error(f"{active_tool} not found in PATH")
+        return
+
+    if result.returncode != 0:
+        _cleanup_staged(staged_conf, backup_path, tool_file)
+        stderr = result.stderr.strip()
+        stdout = result.stdout.strip()
+        error_detail = stderr or stdout or f"exit code {result.returncode}"
+        output_error(f"{active_tool} up failed: {error_detail}")
+        return
+
+    output_success(interface=interface, tool=active_tool, is_amnezia=bool(has_awg_keys and has_awg_tool))
+
+
+def _cleanup_staged(
+    staged_conf: Path, backup_path: Optional[Path], tool_file: Optional[Path] = None
+) -> None:
+    """Remove the staged config; restore backup if one was saved."""
+    try:
+        staged_conf.unlink(missing_ok=True)
+    except OSError:
+        pass
+    if tool_file:
+        try:
+            tool_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+    if backup_path and backup_path.exists():
+        try:
+            backup_path.rename(staged_conf)
+        except OSError:
+            pass
+
+
+def _remove_staged_config(interface: str) -> None:
+    """Remove staged config & tool files from /etc/wireguard/."""
+    staged = Path("/etc/wireguard") / f"{interface}.conf"
+    if staged.exists():
+        try:
+            staged.unlink()
+            log_info(f"Removed staged config: {staged}")
+        except OSError:
+            pass
+    backup = Path("/etc/wireguard") / f"{interface}.conf.bak"
+    if backup.exists():
+        try:
+            backup.unlink()
+        except OSError:
+            pass
+    tool_file = Path("/etc/wireguard") / f"{interface}.tool"
+    if tool_file.exists():
+        try:
+            tool_file.unlink()
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Command: down
+# ---------------------------------------------------------------------------
+
+
+def cmd_down(args: list[str]) -> None:
+    """Bring down a WireGuard interface."""
+    if len(args) < 1:
+        output_error("Usage: down <interface>")
+        return
+
+    interface = derive_interface_name(args[0])
+    if not validate_interface(interface):
+        output_error(f"Invalid interface name: {interface}")
+        return
+
+    if not check_binary("wg-quick"):
+        output_error("wg-quick is not installed")
+        return
+
+    if not interface_exists(interface):
+        # Not an error — maybe already down
+        log_info(f"Interface {interface} does not exist, already down")
+        # Still clean up staged config if it exists
+        _remove_staged_config(interface)
+        output_success()
+        return
+
+    log_info(f"Bringing down interface {interface}")
+
+    # If /etc/wireguard/<iface>.conf exists, wg-quick can do a clean teardown.
+    # Otherwise (interface was created before the staging fix), fall back to
+    # direct ip-link removal.
+    # Check tool file
+    tool_file = Path("/etc/wireguard") / f"{interface}.tool"
+    active_tool = "wg-quick"
+    if tool_file.exists():
+        try:
+            active_tool = tool_file.read_text().strip() or "wg-quick"
+        except OSError:
+            pass
+    if not check_binary(active_tool):
+        active_tool = "wg-quick" if check_binary("wg-quick") else "awg-quick"
+
+    staged_conf = Path("/etc/wireguard") / f"{interface}.conf"
+
+    if staged_conf.exists() and check_binary(active_tool):
+        # Clean teardown via wg-quick or awg-quick
+        try:
+            result = run_cmd([active_tool, "down", interface], timeout=30)
+        except subprocess.TimeoutExpired:
+            output_error(f"{active_tool} down timed out")
+            return
+        except FileNotFoundError:
+            output_error(f"{active_tool} not found")
+            return
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            stdout = result.stdout.strip()
+            error_detail = stderr or stdout or f"exit code {result.returncode}"
+            # Try ip link delete as fallback
+            run_cmd(["ip", "link", "delete", interface], timeout=10)
+    else:
+        # Fallback: no config file — remove the interface directly
+        log_info(
+            f"No staged config at {staged_conf}, using ip link delete"
+        )
+        result = None
+        try:
+            result = run_cmd(["ip", "link", "delete", interface], timeout=10)
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        if result is not None and result.returncode != 0:
+            log_info(f"ip link delete {interface} exit {result.returncode}")
+
+    # Clean up the staged config from /etc/wireguard/ (left by cmd_up)
+    _remove_staged_config(interface)
+
+    output_success()
+
+
+# ---------------------------------------------------------------------------
+# Command: status
+# ---------------------------------------------------------------------------
+
+
+def cmd_status(args: list[str]) -> None:
+    """Query WireGuard interface status."""
+    if not check_binary("wg"):
+        output_error("wg is not installed")
+        return
+
+    if args:
+        interface = derive_interface_name(args[0])
+        if not validate_interface(interface):
+            output_error(f"Invalid interface name: {interface}")
+            return
+        _status_single(interface)
+    else:
+        _status_any()
+
+
+def _status_any() -> None:
+    """Detect any active WireGuard interface and report status."""
+    try:
+        result = run_cmd(["wg", "show"], timeout=10)
+    except subprocess.TimeoutExpired:
+        output_error("wg show timed out")
+        return
+    except FileNotFoundError:
+        output_error("wg not found")
+        return
+
+    if result.returncode != 0 or not result.stdout.strip():
+        output_json({"success": True, "connected": False})
+        return
+
+    # Find the first interface name
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("interface:"):
+            iface = line.split(":", 1)[1].strip()
+            if validate_interface(iface):
+                _status_single(iface)
+                return
+
+    output_json({"success": True, "connected": False})
+
+
+def _status_single(interface: str) -> None:
+    """Report status for a specific interface."""
+    if not interface_exists(interface):
+        output_json({"success": True, "connected": False})
+        return
+
+    try:
+        result = run_cmd(["wg", "show", interface], timeout=10)
+    except subprocess.TimeoutExpired:
+        output_error(f"wg show {interface} timed out")
+        return
+    except FileNotFoundError:
+        output_error("wg not found")
+        return
+
+    if result.returncode != 0:
+        output_json({"success": True, "connected": False})
+        return
+
+    stdout = result.stdout
+    if not stdout.strip():
+        output_json({"success": True, "connected": False})
+        return
+
+    # Parse wg show output
+    public_key = ""
+    endpoint = ""
+    latest_handshake = 0
+    transfer_rx = 0
+    transfer_tx = 0
+    allowed_ips = ""
+
+    for line in stdout.splitlines():
+        line = line.strip()
+        if line.startswith("public key:"):
+            public_key = line.split(":", 1)[1].strip()
+        elif line.startswith("endpoint:"):
+            endpoint = line.split(":", 1)[1].strip()
+        elif line.startswith("allowed ips:"):
+            allowed_ips = line.split(":", 1)[1].strip()
+        elif line.startswith("latest handshake:"):
+            hs_text = line.split(":", 1)[1].strip()
+            latest_handshake = parse_handshake_ago(hs_text)
+        elif line.startswith("transfer:"):
+            transfer_text = line.split(":", 1)[1].strip()
+            match = TRANSFER_RE.search(transfer_text)
+            if match:
+                transfer_rx = parse_transfer_value(match.group(1), match.group(2))
+                transfer_tx = parse_transfer_value(match.group(3), match.group(4))
+
+    output_json({
+        "success": True,
+        "connected": True,
+        "interface": interface,
+        "public_key": public_key,
+        "endpoint": endpoint,
+        "latest_handshake": latest_handshake,
+        "transfer_rx": transfer_rx,
+        "transfer_tx": transfer_tx,
+        "allowed_ips": allowed_ips,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Command: killswitch-on
+# ---------------------------------------------------------------------------
+
+
+def cmd_killswitch_on(args: list[str]) -> None:
+    """Enable traffic kill-switch via iptables."""
+    if len(args) < 2:
+        output_error("Usage: killswitch-on <endpoint_ip> <interface>")
+        return
+
+    endpoint_ip = args[0]
+    interface = derive_interface_name(args[1])
+
+    if not validate_ip(endpoint_ip):
+        output_error(f"Invalid endpoint IP: {endpoint_ip}")
+        return
+    if not validate_interface(interface):
+        output_error(f"Invalid interface: {interface}")
+        return
+
+    if not check_binary("iptables"):
+        output_error("iptables is not installed")
+        return
+
+    log_info(f"Enabling kill-switch: endpoint={endpoint_ip}, iface={interface}")
+
+    try:
+        # Create chain (ignore error if exists)
+        run_cmd(["iptables", "-N", KILLSWITCH_CHAIN])
+
+        # Flush the chain
+        result = run_cmd(["iptables", "-F", KILLSWITCH_CHAIN])
+        if result.returncode != 0:
+            output_error(f"Failed to flush {KILLSWITCH_CHAIN}: {result.stderr}")
+            return
+
+        # Build rules
+        rules: list[list[str]] = [
+            # Allow loopback
+            ["-A", KILLSWITCH_CHAIN, "-o", "lo", "-j", "ACCEPT"],
+            ["-A", KILLSWITCH_CHAIN, "-i", "lo", "-j", "ACCEPT"],
+            # Allow established/related
+            ["-A", KILLSWITCH_CHAIN, "-m", "state", "--state",
+             "ESTABLISHED,RELATED", "-j", "ACCEPT"],
+            # Allow traffic to VPN endpoint
+            ["-A", KILLSWITCH_CHAIN, "-d", endpoint_ip, "-j", "ACCEPT"],
+            # Allow traffic through VPN interface
+            ["-A", KILLSWITCH_CHAIN, "-o", interface, "-j", "ACCEPT"],
+            # Allow DHCP
+            ["-A", KILLSWITCH_CHAIN, "-p", "udp", "--dport", "67:68",
+             "-j", "ACCEPT"],
+            # Allow local networks (for Polkit auth, DNS, etc.)
+            ["-A", KILLSWITCH_CHAIN, "-d", "192.168.0.0/16", "-j", "ACCEPT"],
+            ["-A", KILLSWITCH_CHAIN, "-d", "10.0.0.0/8", "-j", "ACCEPT"],
+            ["-A", KILLSWITCH_CHAIN, "-d", "172.16.0.0/12", "-j", "ACCEPT"],
+            # Drop everything else
+            ["-A", KILLSWITCH_CHAIN, "-j", "DROP"],
+        ]
+
+        for rule in rules:
+            r = run_cmd(["iptables"] + rule)
+            if r.returncode != 0:
+                output_error(f"iptables rule failed: {' '.join(rule)}: {r.stderr}")
+                # Attempt cleanup
+                _killswitch_cleanup()
+                return
+
+        # Insert jump rules at the top of OUTPUT and FORWARD
+        # First remove any existing jumps to avoid duplicates
+        _remove_jump_rules()
+
+        for chain in ("OUTPUT", "FORWARD"):
+            r = run_cmd(["iptables", "-I", chain, "1", "-j", KILLSWITCH_CHAIN])
+            if r.returncode != 0:
+                output_error(
+                    f"Failed to insert jump in {chain}: {r.stderr}"
+                )
+                _killswitch_cleanup()
+                return
+
+        output_success()
+
+    except subprocess.TimeoutExpired:
+        output_error("iptables command timed out")
+    except FileNotFoundError:
+        output_error("iptables not found")
+
+
+# ---------------------------------------------------------------------------
+# Command: killswitch-off
+# ---------------------------------------------------------------------------
+
+
+def cmd_killswitch_off(args: list[str]) -> None:
+    """Disable traffic kill-switch."""
+    log_info("Disabling kill-switch")
+
+    if not check_binary("iptables"):
+        output_error("iptables is not installed")
+        return
+
+    try:
+        _killswitch_cleanup()
+        output_success()
+    except subprocess.TimeoutExpired:
+        output_error("iptables command timed out during cleanup")
+    except FileNotFoundError:
+        output_error("iptables not found")
+
+
+def _remove_jump_rules() -> None:
+    """Remove all jump rules to VPN_KILLSWITCH from OUTPUT and FORWARD."""
+    for chain in ("OUTPUT", "FORWARD"):
+        # Remove all references (there might be multiple)
+        for _ in range(10):  # safety limit
+            r = run_cmd(["iptables", "-D", chain, "-j", KILLSWITCH_CHAIN])
+            if r.returncode != 0:
+                break
+
+
+def _killswitch_cleanup() -> None:
+    """Full cleanup of kill-switch rules."""
+    _remove_jump_rules()
+    # Flush chain
+    run_cmd(["iptables", "-F", KILLSWITCH_CHAIN])
+    # Delete chain
+    run_cmd(["iptables", "-X", KILLSWITCH_CHAIN])
+
+
+# ---------------------------------------------------------------------------
+# Command: dns-set
+# ---------------------------------------------------------------------------
+
+
+def cmd_dns_set(args: list[str]) -> None:
+    """Configure DNS servers for a WireGuard interface via resolvectl."""
+    if len(args) < 2:
+        output_error("Usage: dns-set <interface> <dns1> [dns2] [dns3]")
+        return
+
+    interface = derive_interface_name(args[0])
+    dns_servers = args[1:]
+
+    if not validate_interface(interface):
+        output_error(f"Invalid interface: {interface}")
+        return
+
+    for dns in dns_servers:
+        if not validate_ip(dns):
+            output_error(f"Invalid DNS server address: {dns}")
+            return
+
+    if not interface_exists(interface):
+        output_error(f"Interface {interface} does not exist")
+        return
+
+    # Check for resolvectl
+    if not check_binary("resolvectl"):
+        # Fallback: try systemd-resolve
+        if not check_binary("systemd-resolve"):
+            output_error("Neither resolvectl nor systemd-resolve found")
+            return
+        resolve_cmd = "systemd-resolve"
+    else:
+        resolve_cmd = "resolvectl"
+
+    log_info(f"Setting DNS on {interface}: {dns_servers}")
+
+    try:
+        # Set DNS servers
+        r = run_cmd([resolve_cmd, "dns", interface] + dns_servers)
+        if r.returncode != 0:
+            output_error(f"Failed to set DNS: {r.stderr.strip()}")
+            return
+
+        # Set domain routing (route all DNS through this interface)
+        r = run_cmd([resolve_cmd, "domain", interface, "~."])
+        if r.returncode != 0:
+            # Non-fatal, log warning
+            log_info(f"Warning: could not set domain routing: {r.stderr.strip()}")
+
+        output_success()
+
+    except subprocess.TimeoutExpired:
+        output_error("DNS configuration timed out")
+    except FileNotFoundError:
+        output_error(f"{resolve_cmd} not found")
+
+
+# ---------------------------------------------------------------------------
+# Command: dns-restore
+# ---------------------------------------------------------------------------
+
+
+def cmd_dns_restore(args: list[str]) -> None:
+    """Restore DNS settings for a WireGuard interface."""
+    if len(args) < 1:
+        output_error("Usage: dns-restore <interface>")
+        return
+
+    interface = derive_interface_name(args[0])
+    if not validate_interface(interface):
+        output_error(f"Invalid interface: {interface}")
+        return
+
+    if not check_binary("resolvectl"):
+        if not check_binary("systemd-resolve"):
+            output_error("Neither resolvectl nor systemd-resolve found")
+            return
+        resolve_cmd = "systemd-resolve"
+    else:
+        resolve_cmd = "resolvectl"
+
+    log_info(f"Restoring DNS on {interface}")
+
+    try:
+        r = run_cmd([resolve_cmd, "revert", interface])
+        if r.returncode != 0:
+            # Interface might already be gone, not an error
+            log_info(f"DNS revert note: {r.stderr.strip()}")
+        output_success()
+    except subprocess.TimeoutExpired:
+        output_error("DNS restore timed out")
+    except FileNotFoundError:
+        output_error(f"{resolve_cmd} not found")
+
+
+# ---------------------------------------------------------------------------
+# Command: test-endpoint
+# ---------------------------------------------------------------------------
+
+
+def cmd_test_endpoint(args: list[str]) -> None:
+    """Diagnostic check for a remote endpoint (ping, UDP, DNS)."""
+    if len(args) < 1:
+        output_error("Usage: test-endpoint <host_or_ip> [port]")
+        return
+
+    host = args[0].strip("[]")
+    port = 51820
+    if len(args) >= 2:
+        try:
+            port = int(args[1])
+        except ValueError:
+            pass
+
+    resolved_ip = ""
+    try:
+        addrinfo = socket.getaddrinfo(host, port, socket.AF_INET)
+        if addrinfo:
+            resolved_ip = addrinfo[0][4][0]
+    except Exception:
+        if validate_ip(host):
+            resolved_ip = host
+
+    target = resolved_ip or host
+    ping_ms = None
+    try:
+        r = run_cmd(["ping", "-c", "2", "-W", "2", target], timeout=5)
+        if r.returncode == 0:
+            m = re.search(r"rtt min/avg/max/mdev = [\d.]+/([\d.]+)/", r.stdout)
+            if not m:
+                m = re.search(r"round-trip min/avg/max(?:/\w+)? = [\d.]+/([\d.]+)/", r.stdout)
+            if m:
+                ping_ms = round(float(m.group(1)), 1)
+    except Exception:
+        pass
+
+    output_success(
+        host=host,
+        resolved_ip=resolved_ip,
+        port=port,
+        ping_ms=ping_ms,
+        reachable=bool(resolved_ip and ping_ms is not None),
+    )
+
+
+def cmd_start_tun(args: list[str]) -> None:
+    """Start hev-socks5-tunnel and configure system-wide kernel routing."""
+    socks_port = int(args[0]) if args else 20808
+    tun_name = args[1] if len(args) > 1 else "tun_wavez"
+    fwmark = args[2] if len(args) > 2 else "51820"
+    table = args[3] if len(args) > 3 else "51820"
+
+    # 1. Clean any existing tun
+    cmd_stop_tun([tun_name, fwmark, table], silent=True)
+
+    # 2. Find hev-socks5-tunnel binary
+    candidates = [
+        "/usr/local/bin/hev-socks5-tunnel",
+        "/opt/incy/lib/app/resources/bin/hev-socks5-tunnel",
+        str(Path(__file__).resolve().parent / "bin" / "hev-socks5-tunnel"),
+    ]
+    hev_bin = None
+    for c in candidates:
+        if os.path.isfile(c) and os.access(c, os.X_OK):
+            hev_bin = c
+            break
+
+    if not hev_bin:
+        output_error("hev-socks5-tunnel binary not found")
+        return
+
+    # 3. Create config
+    cfg_path = Path("/tmp/wavez_tun.yml")
+    cfg_content = f"""tunnel:
+  name: {tun_name}
+  mtu: 1500
+  multi-queue: false
+  ipv4: 198.18.0.1
+  ipv6: 'fc00::1'
+
+socks5:
+  port: {socks_port}
+  address: 127.0.0.1
+  udp: 'tcp'
+  mark: {fwmark}
+"""
+    cfg_path.write_text(cfg_content, encoding="utf-8")
+
+    # 4. Start hev-socks5-tunnel detached
+    pid_file = Path("/tmp/wavez_tun.pid")
+    try:
+        proc = subprocess.Popen(
+            [hev_bin, str(cfg_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        pid_file.write_text(str(proc.pid))
+    except Exception as exc:
+        output_error(f"Failed to start hev-socks5-tunnel: {exc}")
+        return
+
+    # 5. Wait for TUN device to appear in /sys/class/net
+    tun_ready = False
+    for _ in range(30):
+        if Path(f"/sys/class/net/{tun_name}").exists():
+            tun_ready = True
+            break
+        time.sleep(0.1)
+
+    if not tun_ready:
+        output_error(f"TUN interface {tun_name} failed to initialize")
+        return
+
+    # 6. Configure interface IP and routes
+    run_cmd(["ip", "link", "set", "dev", tun_name, "up"])
+    run_cmd(["ip", "addr", "add", "198.18.0.1/16", "dev", tun_name])
+
+    # Clean old routes
+    run_cmd(["ip", "rule", "del", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "route", "del", "default", "dev", tun_name, "table", table])
+    run_cmd(["ip", "-6", "rule", "del", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "-6", "route", "del", "default", "dev", tun_name, "table", table])
+
+    # Add default routes through TUN
+    run_cmd(["ip", "route", "replace", "default", "dev", tun_name, "table", table])
+    run_cmd(["ip", "rule", "add", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "-6", "route", "replace", "default", "dev", tun_name, "table", table])
+    run_cmd(["ip", "-6", "rule", "add", "not", "fwmark", fwmark, "table", table])
+
+    # 7. DNS setup via resolvectl
+    run_cmd(["resolvectl", "dns", tun_name, "8.8.8.8", "1.1.1.1"])
+    run_cmd(["resolvectl", "domain", tun_name, "~."])
+    run_cmd(["resolvectl", "flush-caches"])
+
+    output_success(interface=tun_name, pid=proc.pid)
+
+
+def cmd_stop_tun(args: list[str], silent: bool = False) -> None:
+    """Tear down hev-socks5-tunnel and restore routing/DNS."""
+    tun_name = args[0] if len(args) > 0 else "tun_wavez"
+    fwmark = args[1] if len(args) > 1 else "51820"
+    table = args[2] if len(args) > 2 else "51820"
+
+    # 1. Clean routes
+    run_cmd(["ip", "rule", "del", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "route", "del", "default", "dev", tun_name, "table", table])
+    run_cmd(["ip", "-6", "rule", "del", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "-6", "route", "del", "default", "dev", tun_name, "table", table])
+
+    # 2. Restore DNS
+    run_cmd(["resolvectl", "revert", tun_name])
+    run_cmd(["resolvectl", "flush-caches"])
+
+    # 3. Kill process
+    pid_file = Path("/tmp/wavez_tun.pid")
+    if pid_file.is_file():
+        try:
+            pid = int(pid_file.read_text().strip())
+            os.kill(pid, 9)
+        except Exception:
+            pass
+        pid_file.unlink(missing_ok=True)
+
+    run_cmd(["pkill", "-9", "-f", "hev-socks5-tunnel"])
+
+    # 4. Remove interface
+    run_cmd(["ip", "link", "del", "dev", tun_name])
+
+    if not silent:
+        output_success(interface=tun_name)
+
+
+def cmd_setup_xray_routes(args: list[str]) -> None:
+    """Configure system-wide kernel routing and DNS for Xray TUN interface."""
+    tun = args[0] if len(args) > 0 else "tun_wavez"
+    fwmark = args[1] if len(args) > 1 else "51820"
+    table = args[2] if len(args) > 2 else "51820"
+
+    # Wait up to 3s for TUN device to appear in /sys/class/net
+    for _ in range(30):
+        if Path(f"/sys/class/net/{tun}").exists():
+            break
+        time.sleep(0.1)
+
+    # Clean old rules
+    run_cmd(["ip", "rule", "del", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "route", "del", "default", "dev", tun, "table", table])
+    run_cmd(["ip", "-6", "rule", "del", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "-6", "route", "del", "default", "dev", tun, "table", table])
+
+    # Ensure MTU 1400 to prevent packet fragmentation
+    run_cmd(["ip", "link", "set", "dev", tun, "mtu", "1400"])
+
+    # Add default routes through TUN
+    run_cmd(["ip", "route", "replace", "default", "dev", tun, "table", table])
+    run_cmd(["ip", "rule", "add", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "-6", "route", "replace", "default", "dev", tun, "table", table])
+    run_cmd(["ip", "-6", "rule", "add", "not", "fwmark", fwmark, "table", table])
+
+    # Point system DNS to the tunnel resolver
+    run_cmd(["resolvectl", "dns", tun, "8.8.8.8", "1.1.1.1"])
+    run_cmd(["resolvectl", "domain", tun, "~."])
+    run_cmd(["resolvectl", "flush-caches"])
+
+    output_success(interface=tun)
+
+
+def cmd_cleanup_xray_routes(args: list[str]) -> None:
+    """Tear down kernel routing and DNS for Xray TUN interface."""
+    tun = args[0] if len(args) > 0 else "tun_wavez"
+    fwmark = args[1] if len(args) > 1 else "51820"
+    table = args[2] if len(args) > 2 else "51820"
+
+    run_cmd(["ip", "rule", "del", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "route", "del", "default", "dev", tun, "table", table])
+    run_cmd(["ip", "-6", "rule", "del", "not", "fwmark", fwmark, "table", table])
+    run_cmd(["ip", "-6", "route", "del", "default", "dev", tun, "table", table])
+
+    run_cmd(["resolvectl", "revert", tun])
+    run_cmd(["resolvectl", "flush-caches"])
+
+    run_cmd(["ip", "link", "del", "dev", tun])
+
+    output_success(interface=tun)
+
+
+# ---------------------------------------------------------------------------
+# Command dispatch
+# ---------------------------------------------------------------------------
+
+COMMANDS = {
+    "up": cmd_up,
+    "down": cmd_down,
+    "status": cmd_status,
+    "killswitch-on": cmd_killswitch_on,
+    "killswitch-off": cmd_killswitch_off,
+    "dns-set": cmd_dns_set,
+    "dns-restore": cmd_dns_restore,
+    "test-endpoint": cmd_test_endpoint,
+    "start-tun": cmd_start_tun,
+    "stop-tun": cmd_stop_tun,
+    "setup-xray-routes": cmd_setup_xray_routes,
+    "cleanup-xray-routes": cmd_cleanup_xray_routes,
+}
+
+
+def main() -> int:
+    """Entry point for the privileged helper."""
+    syslog.openlog("wavez-vpn-helper", syslog.LOG_PID, syslog.LOG_DAEMON)
+
+    if len(sys.argv) < 2:
+        output_error(
+            f"Usage: {sys.argv[0]} <command> [args...]\n"
+            f"Commands: {', '.join(COMMANDS.keys())}"
+        )
+        return 1
+
+    command = sys.argv[1]
+    args = sys.argv[2:]
+
+    handler = COMMANDS.get(command)
+    if handler is None:
+        output_error(f"Unknown command: {command}")
+        return 1
+
+    log_info(f"Executing command: {command} {' '.join(args)}")
+
+    try:
+        handler(args)
+    except Exception as exc:
+        output_error(f"Unexpected error: {exc}")
+        syslog.syslog(syslog.LOG_ERR, f"vpn-helper exception: {exc}")
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

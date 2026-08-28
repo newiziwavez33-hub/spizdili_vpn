@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution & packaging
+build/
+dist/
+*.egg-info/
+
+# Logs and runtime caches
+*.log
+/run/wavez-vpn/
+/run/ubuntu-vpn/
+*.pid
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE & OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store

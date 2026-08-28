@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Shield shape - disconnected/grey state -->
+  <path d="M12 2L4 5.5v5.75c0 4.83 3.4 9.37 8 10.75 4.6-1.38 8-5.92 8-10.75V5.5L12 2z"
+        fill="#77767b"/>
+  <!-- Lock-open / dash indicating inactive -->
+  <line x1="9" y1="12" x2="15" y2="12"
+        stroke="#ffffff"
+        stroke-width="2"
+        stroke-linecap="round"/>
+</svg>

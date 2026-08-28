@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>WaveZ VPN Client</vendor>
+  <vendor_url>https://github.com/wavez-vpn/wavez-vpn-client</vendor_url>
+
+  <action id="com.wavez.vpnclient.helper">
+    <description>Manage WaveZ VPN connections and firewall</description>
+    <description xml:lang="ru">Управление подключениями WaveZ VPN и файрволом</description>
+    <message>Authentication is required to manage VPN connections and routing</message>
+    <message xml:lang="ru">Требуется аутентификация для управления VPN-соединениями и маршрутизацией</message>
+    <icon_name>network-vpn</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/wavez-vpn/vpn-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">false</annotate>
+  </action>
+</policyconfig>

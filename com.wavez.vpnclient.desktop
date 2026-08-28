@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=SPIZDILI_VPN
+GenericName=VPN Client
+Comment=Fast, secure VPN client with VLESS Reality, WireGuard and AmneziaWG support
+Icon=spizdili-vpn
+Exec=/usr/local/bin/wavez-vpn-client %u
+Terminal=false
+Categories=Network;Security;GTK;
+Keywords=vpn;wireguard;amnezia;vless;reality;proxy;security;privacy;network;wavez;
+StartupNotify=true
+StartupWMClass=com.wavez.vpnclient
+X-Ubuntu-Gettext-Domain=wavez-vpn-client

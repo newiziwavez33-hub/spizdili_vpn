@@ -1,6 +1,6 @@
 """
-Open VLESS Reality Community Feed Fetcher & Tester for SPIZDILI_VPN.
-Fetches, tests, filters by latency, and adds live VLESS Reality servers automatically.
+Quality Open VLESS Reality Community Feed Fetcher & Live Traffic Tester.
+Fetches high-quality open community feeds and verifies 100% working traffic via Xray before adding.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import re
-import socket
+import subprocess
 import time
 import urllib.parse
 import urllib.request
@@ -20,24 +20,131 @@ from typing import Any, Callable, Optional
 
 logger = logging.getLogger("reality_fetcher")
 
+# High-quality actively updated open community feeds
 COMMUNITY_FEEDS = [
-    "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Splitted-By-Protocol/vless.txt",
-    "https://raw.githubusercontent.com/LalatinaHub/Mineral/master/result/nodes",
-    "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
+    "https://raw.githubusercontent.com/snakem982/proxypool/main/source/v2ray-2.txt",
+    "https://raw.githubusercontent.com/free18/v2ray/master/v.txt",
+    "https://raw.githubusercontent.com/ShatakVPN/ConfigForge-V2Ray/main/configs/de/vless.txt",
+    "https://raw.githubusercontent.com/ShatakVPN/ConfigForge-V2Ray/main/configs/nl/vless.txt",
+    "https://raw.githubusercontent.com/ShatakVPN/ConfigForge-V2Ray/main/configs/us/vless.txt",
 ]
 
 USER_SERVERS_JSON = Path.home() / ".config" / "wavez-vpn" / "wavez_servers.json"
 PROFILES_DIR = Path.home() / ".config" / "wavez-vpn" / "profiles"
+XRAY_BIN = "/usr/local/bin/xray-core"
+
+
+def _verify_vless_live_traffic(item: tuple[int, dict[str, Any]], timeout: float = 2.5) -> Optional[dict[str, Any]]:
+    """Test actual end-to-end data proxying through Xray on ephemeral port."""
+    idx, s = item
+    test_port = 10830 + (idx % 25)
+    cfg_file = f"/tmp/verify_probe_{test_port}.json"
+
+    stream: dict[str, Any] = {
+        "network": s["network"],
+        "security": "reality",
+        "realitySettings": {
+            "serverName": s["sni"],
+            "publicKey": s["public_key"],
+            "shortId": s["short_id"],
+            "fingerprint": s.get("fingerprint", "firefox"),
+        },
+        "sockopt": {"mark": 51820},
+    }
+
+    if s["network"] == "grpc":
+        stream["grpcSettings"] = {"serviceName": s.get("serviceName", "")}
+    elif s["network"] == "ws":
+        stream["wsSettings"] = {
+            "path": s.get("ws_path", "/"),
+            "headers": {"Host": s.get("ws_host", s["sni"])},
+        }
+
+    cfg = {
+        "log": {"loglevel": "error"},
+        "inbounds": [{"port": test_port, "listen": "127.0.0.1", "protocol": "socks"}],
+        "outbounds": [
+            {
+                "protocol": "vless",
+                "settings": {
+                    "vnext": [
+                        {
+                            "address": s["address"],
+                            "port": s["port"],
+                            "users": [
+                                {
+                                    "id": s["uuid"],
+                                    "encryption": "none",
+                                    "flow": s.get("flow", ""),
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "streamSettings": stream,
+            }
+        ],
+    }
+
+    proc = None
+    try:
+        with open(cfg_file, "w", encoding="utf-8") as f:
+            json.dump(cfg, f)
+
+        proc = subprocess.Popen(
+            [XRAY_BIN, "run", "-c", cfg_file],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(0.4)
+
+        t0 = time.perf_counter()
+        res = subprocess.run(
+            [
+                "curl",
+                "-s",
+                "--socks5-hostname",
+                f"127.0.0.1:{test_port}",
+                "--max-time",
+                str(timeout),
+                "https://api.ipify.org",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+        if res.returncode == 0 and res.stdout.strip():
+            s["latency"] = elapsed_ms
+            s["proxied_ip"] = res.stdout.strip()
+            return s
+    except Exception as exc:
+        logger.debug("Verification error on %s:%s: %s", s["address"], s["port"], exc)
+    finally:
+        if proc:
+            try:
+                proc.terminate()
+                proc.wait(timeout=1.0)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        if os.path.exists(cfg_file):
+            try:
+                os.remove(cfg_file)
+            except Exception:
+                pass
+    return None
 
 
 def fetch_and_test_reality_servers(
-    max_servers: int = 25,
-    timeout_per_probe: float = 1.2,
+    max_servers: int = 15,
     progress_cb: Optional[Callable[[str], None]] = None,
 ) -> list[dict[str, Any]]:
-    """Fetch open feeds, extract VLESS Reality configs, ping them, and return top responsive servers."""
+    """Fetch open feeds, extract VLESS Reality candidates, and verify live proxy traffic."""
     if progress_cb:
-        progress_cb("Загрузка открытых баз серверов…")
+        progress_cb("Загрузка проверенных баз серверов…")
 
     candidates: list[dict[str, Any]] = []
     seen: set[tuple[str, int]] = set()
@@ -48,7 +155,7 @@ def fetch_and_test_reality_servers(
                 feed_url,
                 headers={"User-Agent": "v2rayN/6.23 SPIZDILI_VPN/1.0.3"},
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=8) as resp:
                 raw = resp.read()
 
             try:
@@ -71,6 +178,7 @@ def fetch_and_test_reality_servers(
                     sid = qs.get("sid", [""])[0]
                     sni = qs.get("sni", [""])[0]
                     flow = qs.get("flow", [""])[0]
+                    net = qs.get("type", ["tcp"])[0]
                     fp = qs.get("fp", ["firefox"])[0]
 
                     if not (addr and port and uuid and pbk and sni):
@@ -81,9 +189,9 @@ def fetch_and_test_reality_servers(
                         continue
                     seen.add(key)
 
-                    frag_name = urllib.parse.unquote(u.fragment).strip()
+                    frag = urllib.parse.unquote(u.fragment).strip()
                     candidates.append({
-                        "raw_name": frag_name,
+                        "raw_name": frag,
                         "address": addr,
                         "port": port,
                         "uuid": uuid,
@@ -91,51 +199,88 @@ def fetch_and_test_reality_servers(
                         "short_id": sid,
                         "sni": sni,
                         "flow": flow,
+                        "network": net,
                         "fingerprint": fp,
+                        "serviceName": qs.get("serviceName", [""])[0],
+                        "ws_path": qs.get("path", ["/"])[0],
+                        "ws_host": qs.get("host", [sni])[0],
                         "uri": line,
                     })
 
-                    if len(candidates) >= max_servers * 3:
+                    if len(candidates) >= max_servers * 4:
                         break
                 except Exception:
                     pass
 
-            if len(candidates) >= max_servers * 2:
+            if len(candidates) >= max_servers * 3:
                 break
         except Exception as exc:
-            logger.warning("Feed %s failed: %s", feed_url, exc)
+            logger.warning("Feed %s error: %s", feed_url, exc)
 
     if not candidates:
-        logger.error("No VLESS Reality candidates found in feeds")
+        logger.error("No candidates found in feeds")
         return []
 
     if progress_cb:
-        progress_cb(f"Найдено {len(candidates)} кандидатов. Проверка связи (пинг)…")
+        progress_cb(f"Найдено {len(candidates)} кандидатов. Тестирование реального трафика…")
 
-    def _ping(s: dict[str, Any]) -> Optional[dict[str, Any]]:
-        try:
-            t0 = time.perf_counter()
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(timeout_per_probe)
-            sock.connect((s["address"], s["port"]))
-            sock.close()
-            s["latency"] = round((time.perf_counter() - t0) * 1000, 1)
-            return s
-        except Exception:
-            return None
+    # Run real traffic verification in parallel
+    verified: list[dict[str, Any]] = []
+    indexed_candidates = list(enumerate(candidates))
 
-    with ThreadPoolExecutor(max_workers=30) as ex:
-        live = [s for s in ex.map(_ping, candidates) if s is not None]
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for res in ex.map(_verify_vless_live_traffic, indexed_candidates):
+            if res:
+                verified.append(res)
+                if progress_cb:
+                    progress_cb(f"✓ Проверен сервер: {res['sni']} ({res['latency']}ms)")
+                if len(verified) >= max_servers:
+                    break
 
-    live.sort(key=lambda x: x["latency"])
-    selected = live[:max_servers]
+    verified.sort(key=lambda x: x["latency"])
 
-    # Format into standard server structures
+    # Format into application standard server objects
     formatted_servers: list[dict[str, Any]] = []
-    for idx, s in enumerate(selected, start=1):
+    for idx, s in enumerate(verified, start=1):
         clean_sni = s["sni"].replace("www.", "").replace("api.", "")
-        display_name = f"⚡ Облако #{idx} ({clean_sni}) 🌐"
+        
+        # Determine flag from fragment or defaults
+        flag = "🌐"
+        raw = s["raw_name"]
+        for emoji in ("🇩🇪", "🇳🇱", "🇺🇸", "🇬🇧", "🇫🇷", "🇸🇪", "🇫🇮", "🇵🇱", "🇹🇷", "🇰🇿", "🇯🇵", "🇸🇬"):
+            if emoji in raw:
+                flag = emoji
+                break
+        if flag == "🌐":
+            if "us" in raw.lower() or "usa" in raw.lower():
+                flag = "🇺🇸"
+            elif "de" in raw.lower() or "germany" in raw.lower():
+                flag = "🇩🇪"
+            elif "nl" in raw.lower() or "netherlands" in raw.lower():
+                flag = "🇳🇱"
+            else:
+                flag = "⚡"
+
+        display_name = f"{flag} Облако #{idx} | {clean_sni} ({int(s['latency'])}ms)"
         ascii_name = f"Cloud-{idx}"
+
+        stream_settings: dict[str, Any] = {
+            "network": s["network"],
+            "security": "reality",
+            "realitySettings": {
+                "serverName": s["sni"],
+                "publicKey": s["public_key"],
+                "shortId": s["short_id"],
+                "fingerprint": s["fingerprint"],
+            },
+        }
+        if s["network"] == "grpc":
+            stream_settings["grpcSettings"] = {"serviceName": s.get("serviceName", "")}
+        elif s["network"] == "ws":
+            stream_settings["wsSettings"] = {
+                "path": s.get("ws_path", "/"),
+                "headers": {"Host": s.get("ws_host", s["sni"])},
+            }
 
         full_config = {
             "log": {"loglevel": "warning"},
@@ -158,16 +303,7 @@ def fetch_and_test_reality_servers(
                             }
                         ]
                     },
-                    "streamSettings": {
-                        "network": "tcp",
-                        "security": "reality",
-                        "realitySettings": {
-                            "serverName": s["sni"],
-                            "publicKey": s["public_key"],
-                            "shortId": s["short_id"],
-                            "fingerprint": s["fingerprint"],
-                        },
-                    },
+                    "streamSettings": stream_settings,
                 },
                 {"protocol": "freedom", "tag": "direct"},
                 {"protocol": "blackhole", "tag": "block"},
@@ -192,7 +328,7 @@ def fetch_and_test_reality_servers(
             "flow": s["flow"],
             "fingerprint": s["fingerprint"],
             "security": "reality",
-            "network": "tcp",
+            "network": s["network"],
             "latency": int(s["latency"]),
             "uri": s["uri"],
             "full_config_json": json.dumps(full_config),
@@ -202,11 +338,10 @@ def fetch_and_test_reality_servers(
 
 
 def save_servers_to_system(servers: list[dict[str, Any]]) -> int:
-    """Save the fetched servers to user database and generate Linux profiles."""
+    """Save the verified servers to user database and generate Linux profiles."""
     if not servers:
         return 0
 
-    # 1. Update ~/.config/wavez-vpn/wavez_servers.json
     USER_SERVERS_JSON.parent.mkdir(parents=True, exist_ok=True)
     existing_servers: list[dict[str, Any]] = []
 
@@ -217,14 +352,14 @@ def save_servers_to_system(servers: list[dict[str, Any]]) -> int:
         except Exception:
             pass
 
-    # Merge: prepend new live cloud servers
+    # Merge: prepend new verified cloud servers, keep previous non-cloud servers
     merged = servers + [s for s in existing_servers if not s.get("id", "").startswith("cloud-reality-")]
     USER_SERVERS_JSON.write_text(
         json.dumps({"count": len(merged), "servers": merged}, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
-    # 2. In Linux: write profile .conf files to ~/.config/wavez-vpn/profiles/
+    # In Linux: write profile .conf files
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
     created_profiles = 0
 

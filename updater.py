@@ -44,7 +44,7 @@ except ImportError:
             GITHUB_RELEASES_API,
         )
     except Exception:
-        CURRENT_VERSION = "1.0.3"
+        CURRENT_VERSION = "1.0.4"
         APP_NAME = "SPIZDILI_VPN"
         GITHUB_OWNER = "newiziwavez33-hub"
         GITHUB_REPO = "spizdili_vpn"

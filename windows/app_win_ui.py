@@ -92,6 +92,7 @@ class SpizdiliVPNWinApp:
         self._setup_styles()
         self._build_ui()
         self._start_background_timers()
+        self.root.after(1000, self._auto_select_fastest_cloud)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -586,6 +587,40 @@ class SpizdiliVPNWinApp:
                 self.root.after(0, lambda: self.btn_cloud_fetch.configure(state="normal", text="🌐 Загрузить свежие серверы из сети"))
 
         threading.Thread(target=_task, daemon=True).start()
+
+    def _auto_select_fastest_cloud(self) -> None:
+        def _worker():
+            cloud_servers = [s for s in self.servers if s.get("ascii_name", "").startswith("Cloud-")][:5]
+            if not cloud_servers:
+                return
+            best_server = None
+            best_ping = 999999.0
+            for s in cloud_servers:
+                addr = s.get("address")
+                port = s.get("port", 443)
+                try:
+                    import socket, time
+                    t0 = time.perf_counter()
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(1.2)
+                    sock.connect((addr, int(port)))
+                    sock.close()
+                    lat = (time.perf_counter() - t0) * 1000
+                    if lat < best_ping:
+                        best_ping = lat
+                        best_server = s
+                except Exception:
+                    pass
+            if best_server:
+                def _apply():
+                    if not self.connected and not self.connecting:
+                        name = best_server.get("name", "")
+                        self.server_var.set(name)
+                        self.lbl_subtitle.configure(text=f"⚡ Самый быстрый: {name} ({int(best_ping)} ms) — подключаем!")
+                        self._toggle_connection()
+                self.root.after(0, _apply)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _on_close(self) -> None:
         if self.connected:

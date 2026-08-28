@@ -573,6 +573,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._build_profiles_page()
         self._build_logs_page()
         self._build_settings_page()
+        # Auto-check Cloud 1-5 and connect to the fastest 1s after start
+        GLib.timeout_add_seconds(1, lambda: self._auto_select_fastest_cloud() or False)
         # Auto-check updates 5s after start
         GLib.timeout_add_seconds(5, lambda: self._schedule_auto_update_check() or False)
 
@@ -605,7 +607,7 @@ class MainWindow(Adw.ApplicationWindow):
         title_box.append(app_title_lbl)
 
         app_ver_lbl = Gtk.Label()
-        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.3</span>")
+        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.4</span>")
         title_box.append(app_ver_lbl)
 
         # ── Mascot Image (SPIZDILI_VPN raccoon logo) ────────────────────
@@ -643,6 +645,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._profile_dropdown_row = Adw.ComboRow(title="Сервер / Локация")
         self._profile_model = Gtk.StringList()
         self._profile_dropdown_row.set_model(self._profile_model)
+        self._profile_dropdown_row.connect("notify::selected", self._on_profile_dropdown_selected)
         self._selector_group.add(self._profile_dropdown_row)
         inner.append(self._selector_group)
 
@@ -1188,6 +1191,65 @@ class MainWindow(Adw.ApplicationWindow):
         import threading as _th
         _th.Thread(target=_delayed, daemon=True).start()
 
+    # ── Auto-select and connect fastest Cloud (1-5) on startup ─────────
+
+    def _auto_select_fastest_cloud(self) -> None:
+        if self._connected or self._connecting:
+            return
+
+        cloud_candidates = [f"Cloud-{i}" for i in range(1, 6)]
+        available = [p for p in cloud_candidates if hasattr(self, "_profile_names") and p in self._profile_names]
+        if not available:
+            return
+
+        self._show_toast("🔍 Проверка серверов Облако 1–5 и выбор самого быстрого…", timeout=3)
+
+        def _worker():
+            best_profile = None
+            best_ping = 999999.0
+
+            for p_name in available:
+                if self._connected or self._connecting:
+                    return
+                s_data = self.vpn.xray.get_server_data(p_name)
+                if not s_data:
+                    continue
+                addr = s_data.get("address")
+                port = s_data.get("port", 443)
+                if not addr:
+                    continue
+
+                try:
+                    import socket, time
+                    t0 = time.perf_counter()
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(1.2)
+                    sock.connect((addr, int(port)))
+                    sock.close()
+                    lat = (time.perf_counter() - t0) * 1000
+                    if lat < best_ping:
+                        best_ping = lat
+                        best_profile = p_name
+                except Exception:
+                    pass
+
+            if best_profile:
+                GLib.idle_add(self._on_auto_cloud_selected, best_profile, round(best_ping, 1))
+
+        import threading as _th
+        _th.Thread(target=_worker, daemon=True).start()
+
+    def _on_auto_cloud_selected(self, profile_name: str, latency: float) -> None:
+        if self._connected or self._connecting:
+            return
+        if hasattr(self, "_profile_names") and profile_name in self._profile_names:
+            idx = self._profile_names.index(profile_name)
+            self._profile_dropdown_row.set_selected(idx)
+            self.cfg.set_last_connected(profile_name)
+            flag = get_server_flag(profile_name)
+            self._show_toast(f"⚡ Самый быстрый: {flag} {profile_name} ({int(latency)} ms) — подключаем!", timeout=4)
+            self._do_connect(profile_name)
+
     def _on_import_incy_servers_clicked(self, button: Gtk.Button) -> None:
         from incy_importer import IncyImporter
         servers = IncyImporter.to_parsed_servers()
@@ -1292,6 +1354,8 @@ class MainWindow(Adw.ApplicationWindow):
             flag = get_server_flag(cfg.name)
             row = Adw.ActionRow(title=f"{flag}  {cfg.name}")
             row.set_icon_name("network-vpn-symbolic")
+            row.set_activatable(True)
+            row.connect("activated", lambda r, n=cfg.name: self._on_profile_row_activated(n))
             endpoint = cfg.get_endpoint_host_port() or "No endpoint"
             row.set_subtitle(endpoint)
 
@@ -1319,7 +1383,7 @@ class MainWindow(Adw.ApplicationWindow):
             conn_btn.add_css_class("circular")
             conn_btn.set_valign(Gtk.Align.CENTER)
             conn_btn.set_tooltip_text(f"Подключить / Переключить на {cfg.name}")
-            conn_btn.connect("clicked", lambda b, n=cfg.name: self._do_connect(n))
+            conn_btn.connect("clicked", lambda b, n=cfg.name: self._on_profile_quick_connect(n))
             row.add_suffix(conn_btn)
 
             # Test & Diagnostics button
@@ -1625,6 +1689,34 @@ class MainWindow(Adw.ApplicationWindow):
             self._show_toast(f"Профиль «{profile_name}» удален")
             logger.info("Deleted profile '%s'", profile_name)
 
+    def _on_profile_dropdown_selected(self, row: Adw.ComboRow, _param) -> None:
+        selected = row.get_selected()
+        if hasattr(self, "_profile_names") and 0 <= selected < len(self._profile_names):
+            name = self._profile_names[selected]
+            self.cfg.set_last_connected(name)
+            if not self._connected:
+                flag = get_server_flag(name)
+                self._status_subtitle.set_text(f"Выбран: {flag} {name}")
+
+    def _on_profile_row_activated(self, profile_name: str) -> None:
+        if hasattr(self, "_profile_names") and profile_name in self._profile_names:
+            idx = self._profile_names.index(profile_name)
+            self._profile_dropdown_row.set_selected(idx)
+            self.cfg.set_last_connected(profile_name)
+            flag = get_server_flag(profile_name)
+            if not self._connected:
+                self._status_subtitle.set_text(f"Выбран: {flag} {profile_name}")
+            self._stack.set_visible_child_name("connection")
+            self._show_toast(f"Выбран сервер: {flag} {profile_name}")
+
+    def _on_profile_quick_connect(self, profile_name: str) -> None:
+        if hasattr(self, "_profile_names") and profile_name in self._profile_names:
+            idx = self._profile_names.index(profile_name)
+            self._profile_dropdown_row.set_selected(idx)
+            self.cfg.set_last_connected(profile_name)
+        self._stack.set_visible_child_name("connection")
+        self._do_connect(profile_name)
+
     # ---- Connection actions -----------------------------------------------
 
     def _on_connect_clicked(self, button: Gtk.Button) -> None:
@@ -1656,6 +1748,10 @@ class MainWindow(Adw.ApplicationWindow):
         if success:
             self._connected = True
             self._active_profile = profile_name
+            if hasattr(self, "_profile_names") and profile_name in self._profile_names:
+                idx = self._profile_names.index(profile_name)
+                self._profile_dropdown_row.set_selected(idx)
+                self.cfg.set_last_connected(profile_name)
             self._connect_time = time.time()
             self._killswitch_enabled = self._killswitch_row.get_active()
             self._update_connection_ui()

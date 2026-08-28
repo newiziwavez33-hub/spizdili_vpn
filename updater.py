@@ -44,7 +44,7 @@ except ImportError:
             GITHUB_RELEASES_API,
         )
     except Exception:
-        CURRENT_VERSION = "1.0.6.1"
+        CURRENT_VERSION = "1.0.7"
         APP_NAME = "SPIZDILI_VPN"
         GITHUB_OWNER = "newiziwavez33-hub"
         GITHUB_REPO = "spizdili_vpn"
@@ -119,18 +119,24 @@ class AppUpdater:
             "User-Agent": f"SPIZDILI-VPN-Updater/{self.current_version} ({platform.system()}; {platform.machine()})",
             "Accept": "application/vnd.github.v3+json",
         }
-        req = urllib.request.Request(self.api_url, headers=headers)
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                if resp.status != 200:
-                    logger.warning("GitHub API returned HTTP %s", resp.status)
-                    return None
-                data = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                logger.info("No releases found on repository.")
-            else:
-                logger.warning("GitHub API HTTPError %s: %s", exc.code, exc.reason)
+        data = None
+        for test_url in [self.api_url, f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases"]:
+            try:
+                req = urllib.request.Request(test_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    if resp.status == 200:
+                        raw = json.loads(resp.read().decode("utf-8"))
+                        if isinstance(raw, list) and raw:
+                            data = raw[0]
+                        elif isinstance(raw, dict) and raw.get("tag_name"):
+                            data = raw
+                        if data:
+                            break
+            except Exception as e:
+                logger.debug("API check %s failed: %s", test_url, e)
+                continue
+        if not data:
+            logger.warning("No release data obtained from GitHub API")
             return None
         except Exception as exc:
             logger.warning("Failed to check for updates: %s", exc)

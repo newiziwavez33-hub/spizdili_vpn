@@ -43,7 +43,7 @@ except ImportError:
 try:
     from version import APP_VERSION
 except ImportError:
-    APP_VERSION = "1.0.6.1"
+    APP_VERSION = "1.0.7"
 
 __all__ = ["VPNApplication"]
 
@@ -562,7 +562,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.6.1)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.7)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -679,7 +679,7 @@ class MainWindow(Adw.ApplicationWindow):
         title_box.append(app_title_lbl)
 
         app_ver_lbl = Gtk.Label()
-        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.6.1</span>")
+        app_ver_lbl.set_markup("<span size='12000' weight='bold' foreground='#3584e4'>v 1.0.7</span>")
         title_box.append(app_ver_lbl)
 
         # ── Mascot Image (SPIZDILI_VPN raccoon logo) ────────────────────

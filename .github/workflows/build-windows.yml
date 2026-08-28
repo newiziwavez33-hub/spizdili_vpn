@@ -1,0 +1,80 @@
+name: Build Windows Release (.exe)
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Build Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pillow requests pystray
+
+      - name: Download Windows Xray Core
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bin
+          $url = "https://github.com/XTLS/Xray-core/releases/download/v1.8.24/Xray-windows-64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "bin/xray_win.zip"
+          Expand-Archive -Path "bin/xray_win.zip" -DestinationPath "bin" -Force
+          Remove-Item "bin/xray_win.zip" -Force
+          Write-Host "Xray core downloaded and extracted."
+
+      - name: Build Standalone Windows Executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --onefile --windowed `
+            --name "SPIZDILI_VPN" `
+            --icon "icons/spizdili-vpn.ico" `
+            --add-data "icons;icons" `
+            --add-data "wavez_servers.json;." `
+            --add-data "bin/xray.exe;bin" `
+            --add-data "bin/geoip.dat;bin" `
+            --add-data "bin/geosite.dat;bin" `
+            windows/main_win.py
+
+      - name: Package Windows Release Archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+          Copy-Item -Path "dist/SPIZDILI_VPN.exe" -Destination "release/"
+          Copy-Item -Path "README.md" -Destination "release/"
+          Copy-Item -Path "LICENSE" -Destination "release/"
+          Compress-Archive -Path "release/*" -DestinationPath "SPIZDILI_VPN-v1.0.3-Windows-x64.zip" -Force
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SPIZDILI_VPN-Windows-x64
+          path: |
+            dist/SPIZDILI_VPN.exe
+            SPIZDILI_VPN-v1.0.3-Windows-x64.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "SPIZDILI_VPN v1.0.3 (Linux & Windows Release)"
+          tag_name: "v1.0.3"
+          draft: false
+          prerelease: false
+          files: |
+            dist/SPIZDILI_VPN.exe
+            SPIZDILI_VPN-v1.0.3-Windows-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

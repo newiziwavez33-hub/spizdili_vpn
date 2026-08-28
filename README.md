@@ -5,17 +5,41 @@
 <h1 align="center">🦝 SPIZDILI_VPN (v1.0.3)</h1>
 
 <p align="center">
-  <b>Современный, автономный и быстрый VPN-клиент для Linux (Ubuntu / Debian / Pop!_OS / Fedora / Arch)</b><br>
+  <b>Современный, автономный и быстрый VPN-клиент для Windows 7/8/10/11 и Linux</b><br>
   <i>Прямое подключение без подписок и логинов • VLESS Reality (XTLS Vision) • WireGuard • AmneziaWG • Оптимизация для AI IDE</i>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Ubuntu%20%7C%20Debian-orange?style=flat-square&logo=linux" alt="Platform" />
-  <img src="https://img.shields.io/badge/GUI-GTK4%20%2B%20Libadwaita-blue?style=flat-square&logo=gnome" alt="GUI" />
+  <img src="https://img.shields.io/badge/Windows-7%20%7C%208%20%7C%2010%20%7C%2011-0078D6?style=flat-square&logo=windows" alt="Windows" />
+  <img src="https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Debian%20%7C%20Arch%20%7C%20Fedora-E95420?style=flat-square&logo=ubuntu" alt="Linux" />
+  <img src="https://img.shields.io/badge/GUI-Native%20Dark%20%2B%20GTK4-blue?style=flat-square" alt="GUI" />
   <img src="https://img.shields.io/badge/Protocols-VLESS%20Reality%20%7C%20WireGuard%20%7C%20AWG-purple?style=flat-square" alt="Protocols" />
   <img src="https://img.shields.io/badge/AI%20Optimized-Antigravity%20%7C%20Gemini%20%7C%20Claude%20%7C%20ChatGPT-brightgreen?style=flat-square" alt="AI Optimized" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="License" />
 </p>
+
+---
+
+## 🪟 Запуск на Windows 7 / 8 / 10 / 11 (Без установки)
+
+Версия для Windows собрана в виде **портативного `.exe` файла**, работающего «из коробки» на любой версии Windows (7 SP1, 8.1, 10, 11):
+
+1. Перейдите во вкладку **[Releases](https://github.com/newiziwavez33-hub/spizdili_vpn/releases)**.
+2. Скачайте **`SPIZDILI_VPN.exe`** (или `SPIZDILI_VPN-v1.0.3-Windows-x64.zip`).
+3. Запустите `SPIZDILI_VPN.exe` — приложение готово к работе сразу со всеми 37 серверами и AI-оптимизацией!
+
+---
+
+## 🐧 Установка на Linux (Ubuntu / Debian / Pop!_OS / Fedora / Arch)
+
+```bash
+# Клонируйте репозиторий
+git clone https://github.com/newiziwavez33-hub/spizdili_vpn.git
+cd spizdili_vpn
+
+# Запустите автономную установку
+sudo ./install.sh
+```
 
 ---
 

@@ -230,6 +230,8 @@ install_python_modules() {
     local modules=(
         "main.py"
         "app_ui.py"
+        "version.py"
+        "updater.py"
         "vpn_manager.py"
         "xray_manager.py"
         "settings_manager.py"

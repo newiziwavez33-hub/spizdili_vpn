@@ -10,14 +10,41 @@ import json
 import time
 import threading
 import urllib.request
+import webbrowser
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pathlib import Path
 from typing import Optional, Any
 from PIL import Image, ImageTk
 
-from windows.win_proxy import WindowsProxyManager
-from windows.xray_win import WindowsXrayManager, HTTP_PORT, SOCKS_PORT
+try:
+    from version import __version__ as APP_VERSION, GITHUB_REPO_URL
+except ImportError:
+    try:
+        from ..version import __version__ as APP_VERSION, GITHUB_REPO_URL
+    except Exception:
+        APP_VERSION = "1.0.3"
+        GITHUB_REPO_URL = "https://github.com/newiziwavez33-hub/spizdili_vpn"
+
+try:
+    from updater import default_updater, UpdateInfo, is_newer_version
+except ImportError:
+    try:
+        from ..updater import default_updater, UpdateInfo, is_newer_version
+    except Exception:
+        default_updater = None
+        UpdateInfo = None
+        is_newer_version = lambda a, b: False
+
+try:
+    from windows.win_proxy import WindowsProxyManager
+    from windows.xray_win import WindowsXrayManager, HTTP_PORT, SOCKS_PORT
+except ImportError:
+    try:
+        from win_proxy import WindowsProxyManager
+        from xray_win import WindowsXrayManager, HTTP_PORT, SOCKS_PORT
+    except ImportError:
+        pass
 
 
 def get_base_dir() -> Path:
@@ -29,7 +56,7 @@ def get_base_dir() -> Path:
 class SpizdiliVPNWinApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("SPIZDILI_VPN (v 1.0.3)")
+        self.root.title(f"SPIZDILI_VPN (v {APP_VERSION})")
         self.root.geometry("480x680")
         self.root.minsize(400, 580)
         self.root.configure(bg="#1e1e2e")
@@ -118,6 +145,26 @@ class SpizdiliVPNWinApp:
         )
         self.style.map("Disconnect.TButton", background=[("active", "#eba0ac")])
 
+        self.style.configure(
+            "Update.TButton",
+            font=("Segoe UI", 9, "bold"),
+            background="#89b4fa",
+            foreground="#11111b",
+            padding=6,
+            borderwidth=0,
+        )
+        self.style.map("Update.TButton", background=[("active", "#b4befe")])
+
+        self.style.configure(
+            "Secondary.TButton",
+            font=("Segoe UI", 9),
+            background="#313244",
+            foreground="#cdd6f4",
+            padding=6,
+            borderwidth=0,
+        )
+        self.style.map("Secondary.TButton", background=[("active", "#45475a")])
+
         self.style.configure("TCombobox", fieldbackground="#313244", background="#45475a", foreground="#cdd6f4")
 
     def _build_ui(self) -> None:
@@ -131,7 +178,7 @@ class SpizdiliVPNWinApp:
         lbl_title = ttk.Label(hdr_frame, text="SPIZDILI_VPN", style="Header.TLabel", anchor="center")
         lbl_title.pack()
 
-        lbl_ver = ttk.Label(hdr_frame, text="v 1.0.3  •  Windows Edition", style="Ver.TLabel", anchor="center")
+        lbl_ver = ttk.Label(hdr_frame, text=f"v {APP_VERSION}  •  Windows Edition", style="Ver.TLabel", anchor="center")
         lbl_ver.pack()
 
         # ── Mascot Image ────────────────────────────────────────────────
@@ -168,13 +215,13 @@ class SpizdiliVPNWinApp:
         self.combo_server = ttk.Combobox(sel_frame, textvariable=self.server_var, values=server_names, state="readonly", font=("Segoe UI", 10))
         self.combo_server.pack(fill="x", pady=5)
 
-        # ── Main Connect / Disconnect Button ────────────────────────────
+        # ── Main Connect / Disconnect Button ────────────────────
         self.btn_action = ttk.Button(container, text="⚡ Подключить", style="Connect.TButton", command=self._toggle_connection)
         self.btn_action.pack(fill="x", ipady=4, pady=(0, 15))
 
         # ── Connection Metrics Card ─────────────────────────────────────
         self.card_frame = ttk.LabelFrame(container, text="  Параметры соединения  ", padding=10)
-        self.card_frame.pack(fill="x", pady=(0, 15))
+        self.card_frame.pack(fill="x", pady=(0, 12))
 
         # Grid metrics
         ttk.Label(self.card_frame, text="Внешний IP:", style="Metric.TLabel").grid(row=0, column=0, sticky="w", pady=3)
@@ -191,6 +238,26 @@ class SpizdiliVPNWinApp:
 
         self.card_frame.columnconfigure(0, weight=1)
         self.card_frame.columnconfigure(1, weight=1)
+
+        # ── Updates & Releases Card ─────────────────────────────────────
+        upd_frame = ttk.LabelFrame(container, text="  Обновления программы  ", padding=10)
+        upd_frame.pack(fill="x", pady=(0, 10))
+        upd_frame.columnconfigure(0, weight=1)
+        upd_frame.columnconfigure(1, weight=1)
+
+        self.lbl_update_ver = ttk.Label(upd_frame, text=f"Версия: v{APP_VERSION}", style="Metric.TLabel")
+        self.lbl_update_ver.grid(row=0, column=0, sticky="w", pady=2)
+
+        self.btn_check_update = ttk.Button(
+            upd_frame,
+            text="🔄 Проверить",
+            style="Secondary.TButton",
+            command=lambda: self._check_updates_async(manual=True)
+        )
+        self.btn_check_update.grid(row=0, column=1, sticky="e", pady=2)
+
+        self.lbl_update_status = ttk.Label(upd_frame, text="", style="Sub.TLabel")
+        self.lbl_update_status.grid(row=1, column=0, columnspan=2, sticky="w", pady=(3, 0))
 
         # ── AI IDE Optimization Badge ───────────────────────────────────
         ai_frame = ttk.Frame(container)
@@ -315,6 +382,179 @@ class SpizdiliVPNWinApp:
             self.root.after(1000, update_uptime)
 
         self.root.after(1000, update_uptime)
+        self.root.after(2200, self._auto_check_updates_startup)
+
+    def _auto_check_updates_startup(self) -> None:
+        self._check_updates_async(manual=False)
+
+    def _check_updates_async(self, manual: bool = False) -> None:
+        if default_updater is None:
+            if manual:
+                messagebox.showinfo("Обновление", "Модуль обновления недоступен.")
+            return
+
+        if manual:
+            self.lbl_update_status.configure(text="⏳ Проверка обновлений на GitHub...", foreground="#a6adc8")
+
+        def _worker():
+            try:
+                info = default_updater.check_for_updates()
+            except Exception:
+                info = None
+            self.root.after(0, lambda: self._on_update_check_result(info, manual))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_update_check_result(self, info: Optional[Any], manual: bool) -> None:
+        if info is None:
+            self.lbl_update_status.configure(text="Не удалось проверить обновления", foreground="#f38ba8")
+            if manual:
+                messagebox.showwarning("Обновление", "Не удалось связаться с сервером GitHub Releases.")
+            return
+
+        if info.has_update:
+            self.lbl_update_status.configure(
+                text=f"🎉 Доступна новая версия: v{info.latest_version}!",
+                foreground="#89b4fa"
+            )
+            self._show_update_modal(info)
+        else:
+            self.lbl_update_status.configure(
+                text=f"✓ У вас установлена актуальная версия (v{APP_VERSION})",
+                foreground="#a6e3a1"
+            )
+            if manual:
+                messagebox.showinfo("Обновление", f"У вас установлена последняя версия SPIZDILI_VPN (v{APP_VERSION}).")
+
+    def _show_update_modal(self, info: Any) -> None:
+        modal = tk.Toplevel(self.root)
+        modal.title(f"Обновление SPIZDILI_VPN v{info.latest_version}")
+        modal.geometry("480x440")
+        modal.minsize(420, 380)
+        modal.configure(bg="#1e1e2e")
+        modal.transient(self.root)
+        modal.grab_set()
+
+        try:
+            ico_path = self.base_dir / "icons" / "spizdili-vpn.ico"
+            if ico_path.is_file():
+                modal.iconbitmap(str(ico_path))
+        except Exception:
+            pass
+
+        frame = ttk.Frame(modal, padding=16)
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(0, weight=1)
+
+        title_lbl = ttk.Label(
+            frame,
+            text=f"🎉 Доступна версия v{info.latest_version}!",
+            style="Header.TLabel",
+            anchor="center",
+            font=("Segoe UI", 13, "bold"),
+        )
+        title_lbl.pack(fill="x", pady=(0, 4))
+
+        sub_txt = f"Текущая версия: v{APP_VERSION}"
+        if getattr(info, "published_at", None):
+            sub_txt += f" • Выпущено: {info.published_at[:10]}"
+        sub_lbl = ttk.Label(frame, text=sub_txt, style="Sub.TLabel", anchor="center")
+        sub_lbl.pack(fill="x", pady=(0, 10))
+
+        # Changelog / Notes Box
+        notes_frame = ttk.LabelFrame(frame, text="  Что нового  ", padding=8)
+        notes_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+        txt = tk.Text(
+            notes_frame,
+            bg="#313244",
+            fg="#cdd6f4",
+            insertbackground="#89b4fa",
+            relief="flat",
+            wrap="word",
+            font=("Segoe UI", 9),
+            height=7,
+        )
+        txt.pack(side="left", fill="both", expand=True)
+        scroll = ttk.Scrollbar(notes_frame, orient="vertical", command=txt.yview)
+        scroll.pack(side="right", fill="y")
+        txt.configure(yscrollcommand=scroll.set)
+
+        notes_body = info.release_notes or info.title or "Официальный релиз клиента."
+        txt.insert("1.0", notes_body)
+        txt.configure(state="disabled")
+
+        # Progress / Status
+        status_lbl = ttk.Label(frame, text="", style="Sub.TLabel", anchor="center")
+        status_lbl.pack(fill="x", pady=(0, 4))
+
+        prog_bar = ttk.Progressbar(frame, orient="horizontal", mode="determinate")
+        prog_bar.pack(fill="x", pady=(0, 10))
+        prog_bar.pack_forget()
+
+        # Action Buttons
+        btn_box = ttk.Frame(frame)
+        btn_box.pack(fill="x", pady=(4, 0))
+        btn_box.columnconfigure(0, weight=1)
+        btn_box.columnconfigure(1, weight=1)
+
+        def _on_start_download():
+            btn_dl.configure(state="disabled", text="⏳ Скачивание...")
+            prog_bar.pack(fill="x", pady=(0, 10))
+            status_lbl.configure(text="Подключение к GitHub...")
+
+            def _dl_task():
+                exe_url = info.exe_asset_url or info.zip_asset_url
+                if not exe_url:
+                    for a in getattr(info, "all_assets", []):
+                        aname = a.get("name", "").lower()
+                        if aname.endswith(".exe") or aname.endswith(".zip"):
+                            exe_url = a.get("browser_download_url")
+                            break
+
+                if not exe_url:
+                    modal.after(0, lambda: status_lbl.configure(text="EXE файл не найден в релизе. Откройте GitHub."))
+                    modal.after(0, lambda: btn_dl.configure(state="normal", text="⚡ Скачать и обновить"))
+                    return
+
+                temp_dir = Path(os.environ.get("TEMP", tempfile.gettempdir()))
+                dest_file = temp_dir / (info.exe_asset_name or f"SPIZDILI_VPN_v{info.latest_version}.exe")
+
+                def _prog(dl, tot):
+                    if tot > 0:
+                        pct = int((dl / tot) * 100)
+                        mb_dl = dl / (1024 * 1024)
+                        mb_tot = tot / (1024 * 1024)
+                        modal.after(0, lambda: prog_bar.configure(value=pct))
+                        modal.after(0, lambda: status_lbl.configure(text=f"Скачано: {mb_dl:.1f} / {mb_tot:.1f} MB ({pct}%)"))
+
+                ok = default_updater.download_file(exe_url, dest_file, progress_cb=_prog)
+                if not ok:
+                    modal.after(0, lambda: status_lbl.configure(text="❌ Ошибка скачивания."))
+                    modal.after(0, lambda: btn_dl.configure(state="normal", text="⚡ Скачать и обновить"))
+                    return
+
+                modal.after(0, lambda: status_lbl.configure(text="Применение обновления..."))
+                ok_app, app_msg = default_updater.apply_windows_update(dest_file)
+                if ok_app:
+                    modal.after(0, lambda: status_lbl.configure(text="✓ Обновление применено! Перезапуск..."))
+                    time.sleep(1.2)
+                    self.root.destroy()
+                    sys.exit(0)
+                else:
+                    modal.after(0, lambda: status_lbl.configure(text=f"Ошибка: {app_msg}"))
+                    modal.after(0, lambda: btn_dl.configure(state="normal", text="⚡ Скачать и обновить"))
+
+            threading.Thread(target=_dl_task, daemon=True).start()
+
+        btn_dl = ttk.Button(btn_box, text="⚡ Скачать и обновить", style="Update.TButton", command=_on_start_download)
+        btn_dl.grid(row=0, column=0, padx=(0, 6), sticky="ew")
+
+        def _open_gh():
+            webbrowser.open(info.release_url or GITHUB_REPO_URL)
+
+        btn_gh = ttk.Button(btn_box, text="🌐 На GitHub", style="Secondary.TButton", command=_open_gh)
+        btn_gh.grid(row=0, column=1, padx=(6, 0), sticky="ew")
 
     def _on_close(self) -> None:
         if self.connected:

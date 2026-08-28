@@ -50,6 +50,8 @@ def build() -> None:
         "--windowed",
         "--name=SPIZDILI_VPN",
         f"--icon={BASE_DIR / 'icons' / 'spizdili-vpn.ico'}",
+        f"--paths={BASE_DIR}",
+        f"--paths={BASE_DIR / 'windows'}",
         f"--add-data={BASE_DIR / 'icons'}{os.pathsep}icons",
         f"--add-data={BASE_DIR / 'wavez_servers.json'}{os.pathsep}.",
         f"--add-data={BIN_DIR / 'xray.exe'}{os.pathsep}bin",

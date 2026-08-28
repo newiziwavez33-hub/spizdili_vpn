@@ -6,7 +6,10 @@ Uses native WinINet API & Registry to enable/disable system-wide proxy instantly
 
 import sys
 import ctypes
-import winreg if sys.platform == "win32" else None
+if sys.platform == "win32":
+    import winreg
+else:
+    winreg = None
 import subprocess
 import logging
 

@@ -2,5 +2,10 @@
 
 APP_NAME = "SPIZDILI_VPN"
 APP_VERSION = "1.0.3"
-GITHUB_REPO = "newiziwavez33-hub/spizdili_vpn"
-GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+__version__ = APP_VERSION
+
+GITHUB_OWNER = "newiziwavez33-hub"
+GITHUB_REPO = "spizdili_vpn"
+GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
+GITHUB_RELEASES_API = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
+GITHUB_API_URL = GITHUB_RELEASES_API

@@ -1,0 +1,315 @@
+/* SPIZDILI_VPN Modern Chrome Popup Styles (Catppuccin Mocha Dark) */
+:root {
+  --bg-base: #1e1e2e;
+  --bg-surface: #252538;
+  --bg-overlay: #313244;
+  --text-main: #cdd6f4;
+  --text-sub: #a6adc8;
+  --accent-blue: #89b4fa;
+  --accent-green: #a6e3a1;
+  --accent-red: #f38ba8;
+  --accent-yellow: #f9e2af;
+  --border-color: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  user-select: none;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  width: 350px;
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.card {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Header & Mascot */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+}
+
+.mascot-wrapper {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  padding: 3px;
+  background: linear-gradient(135deg, #313244, #45475a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: all 0.3s ease;
+}
+
+.mascot-wrapper.active {
+  background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+  box-shadow: 0 0 16px rgba(166, 227, 161, 0.45);
+}
+
+.raccoon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.title-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.version-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  margin-top: 2px;
+}
+
+/* Power Section */
+.power-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0 6px;
+  text-align: center;
+}
+
+.power-btn {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  border: 4px solid var(--bg-overlay);
+  background: linear-gradient(145deg, #2a2b3d, #1c1d2a);
+  color: var(--text-sub);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.power-btn:hover {
+  transform: translateY(-2px);
+  border-color: #45475a;
+  color: #ffffff;
+}
+
+.power-btn.connecting {
+  border-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+  animation: pulse-yellow 1.5s infinite;
+}
+
+.power-btn.connected {
+  background: linear-gradient(145deg, #1b3d2b, #132b1f);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+  box-shadow: 0 0 24px rgba(166, 227, 161, 0.35);
+  animation: pulse-green 2.5s infinite;
+}
+
+@keyframes pulse-green {
+  0% { box-shadow: 0 0 12px rgba(166, 227, 161, 0.3); }
+  50% { box-shadow: 0 0 28px rgba(166, 227, 161, 0.6); }
+  100% { box-shadow: 0 0 12px rgba(166, 227, 161, 0.3); }
+}
+
+@keyframes pulse-yellow {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+.status-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 14px;
+  color: #ffffff;
+}
+
+.status-subtitle {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-top: 4px;
+  min-height: 16px;
+}
+
+/* Selector Section */
+.selector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-sub);
+}
+
+.select-wrapper {
+  position: relative;
+}
+
+.styled-select {
+  width: 100%;
+  padding: 10px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a6adc8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.styled-select:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background-color: var(--bg-overlay);
+}
+
+.styled-select:focus {
+  border-color: var(--accent-blue);
+}
+
+/* Network Info Card */
+.network-info {
+  background-color: var(--bg-surface);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.network-info.visible {
+  display: flex;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.info-label {
+  color: var(--text-sub);
+}
+
+.info-value {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.info-value.safe {
+  color: var(--accent-green);
+}
+
+/* Toggle Option */
+.options-section {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.toggle-option input {
+  display: none;
+}
+
+.toggle-slider {
+  width: 32px;
+  height: 18px;
+  background-color: var(--bg-overlay);
+  border-radius: 20px;
+  position: relative;
+  transition: 0.3s;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  left: 2px;
+  top: 2px;
+  background-color: #ffffff;
+  transition: 0.3s;
+}
+
+.toggle-option input:checked + .toggle-slider {
+  background-color: var(--accent-blue);
+}
+
+.toggle-option input:checked + .toggle-slider::before {
+  transform: translateX(14px);
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  font-size: 11px;
+}
+
+.raccoon-quote {
+  color: #6c7086;
+  font-style: italic;
+}
+
+.github-link {
+  color: var(--accent-blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.github-link:hover {
+  text-decoration: underline;
+}

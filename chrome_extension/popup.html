@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPIZDILI_VPN</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="card">
+    <!-- Header with Raccoon Mascot -->
+    <div class="header">
+      <div class="mascot-wrapper" id="mascot-wrapper">
+        <img src="icons/spizdili-logo.png" alt="Енот SPIZDILI_VPN" class="raccoon-img" id="raccoon-avatar" />
+      </div>
+      <div class="title-wrapper">
+        <h1 class="brand-title">SPIZDILI_VPN</h1>
+        <div class="version-badge">v1.0.6 • Chrome Edition</div>
+      </div>
+    </div>
+
+    <!-- Main Power / Connect Button -->
+    <div class="power-section">
+      <button class="power-btn" id="btn-toggle" title="Подключить / Отключить">
+        <div class="power-icon">
+          <svg viewBox="0 0 24 24" width="36" height="36" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+          </svg>
+        </div>
+      </button>
+      <div class="status-title" id="status-title">Отключено</div>
+      <div class="status-subtitle" id="status-subtitle">Выберите сервер и нажмите для подключения</div>
+    </div>
+
+    <!-- Server Selector -->
+    <div class="selector-section">
+      <label class="section-label" for="server-select">Сервер / Прокси-узел:</label>
+      <div class="select-wrapper">
+        <select id="server-select" class="styled-select">
+          <option value="local">🦝 Локальный туннель SPIZDILI (127.0.0.1:10808)</option>
+          <option value="fi">🇫🇮 Финляндия • Облако #1 (cloudflare.com)</option>
+          <option value="se">🇸🇪 Швеция • Облако #2 (yandex.net)</option>
+          <option value="de">🇩🇪 Германия • Облако #3 (cloudflare.com)</option>
+          <option value="nl">🇳🇱 Нидерланды • Облако #4 (samsung.com)</option>
+          <option value="us">🇺🇸 США • Облако #5 (intel.com)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Network Info Panel (Shows when connected) -->
+    <div class="network-info" id="network-info">
+      <div class="info-row">
+        <span class="info-label">Внешний IP:</span>
+        <span class="info-value" id="ext-ip">Определение…</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Локация:</span>
+        <span class="info-value" id="ext-country">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Статус защиты:</span>
+        <span class="info-value safe">🟢 Зашифровано</span>
+      </div>
+    </div>
+
+    <!-- Quick Options -->
+    <div class="options-section">
+      <label class="toggle-option">
+        <input type="checkbox" id="chk-bypass-ru" checked />
+        <span class="toggle-slider"></span>
+        <span class="toggle-text">Не проксировать .RU и гос. сайты</span>
+      </label>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span class="raccoon-quote">🦝 «Быстро, автономно, без подписок»</span>
+      <a href="https://github.com/newiziwavez33-hub/spizdili_vpn" target="_blank" class="github-link">GitHub</a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

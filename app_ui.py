@@ -460,78 +460,160 @@ class VPNApplication(Adw.Application):
 
     def _setup_css(self) -> None:
         css = """
+        * {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+        }
+
         window, .aether-window {
             background-color: #141226;
             color: #f1f5f9;
         }
 
-        .sidebar-panel {
-            background: linear-gradient(180deg, #1d183d 0%, #121024 100%);
-            border-right: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 16px 12px;
+        /* ── HeaderBar Window Frame (Draggable & Integrated) ── */
+        headerbar.aether-header {
+            background: linear-gradient(180deg, rgba(32, 26, 66, 0.95) 0%, rgba(20, 18, 38, 0.95) 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            padding: 4px 10px;
         }
 
-        .nav-btn {
+        .header-tabs {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 9999px;
+            padding: 2px 4px;
+        }
+
+        .header-tab-btn {
             background: transparent;
             color: #94a3b8;
-            border-radius: 12px;
-            padding: 10px 14px;
+            border-radius: 9999px;
+            padding: 4px 14px;
+            font-size: 12px;
             font-weight: 600;
-            font-size: 13px;
             border: none;
             box-shadow: none;
             transition: all 180ms ease;
         }
 
+        .header-tab-btn:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .header-tab-btn.active {
+            background: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 70%),
+                        linear-gradient(180deg, #6366f1 0%, #4338ca 100%);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 2px 8px rgba(99, 102, 241, 0.5);
+            color: #ffffff;
+        }
+
+        .header-icon-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 6px;
+            color: #cbd5e1;
+            transition: all 180ms ease;
+        }
+
+        .header-icon-btn:hover {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+
+        .sidebar-panel {
+            background: linear-gradient(180deg, #1b1638 0%, #110f22 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 16px 12px;
+        }
+
+        /* ── AAA Ultra-Glossy Specular Highlight Nav Buttons ── */
+        .glossy-btn, .nav-btn {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            color: #cbd5e1;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 10px 14px;
+            transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         .nav-btn:hover {
-            background: rgba(255, 255, 255, 0.06);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 100%);
+            border-color: rgba(255, 255, 255, 0.28);
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.45), 0 4px 14px rgba(0, 0, 0, 0.45);
             color: #ffffff;
         }
 
         .nav-btn.active {
-            background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+            background: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 70%),
+                        linear-gradient(180deg, #6366f1 0%, #4338ca 100%);
+            border: 1px solid rgba(255, 255, 255, 0.38);
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.65), 0 4px 18px rgba(99, 102, 241, 0.65);
             color: #ffffff;
-            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
         }
 
+        /* ── Turn On Circular AAA Gloss Button with Lens Flare ── */
         .turn-on-btn {
-            min-width: 144px;
-            min-height: 144px;
+            min-width: 148px;
+            min-height: 148px;
             border-radius: 9999px;
-            background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
-            border: 5px solid #334155;
+            background: radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 52%),
+                        linear-gradient(180deg, #28244c 0%, #17142e 48%, #0d0b1d 52%, #191632 100%);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.55),
+                        inset 0 -3px 5px rgba(0, 0, 0, 0.8),
+                        0 10px 28px rgba(0, 0, 0, 0.6),
+                        0 0 24px rgba(56, 189, 248, 0.35);
             color: #38bdf8;
-            box-shadow: 0 0 26px rgba(56, 189, 248, 0.25);
             transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .turn-on-btn:hover {
-            border-color: #38bdf8;
-            box-shadow: 0 0 38px rgba(56, 189, 248, 0.5);
+            background: radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 60%),
+                        linear-gradient(180deg, #363162 0%, #1f1b40 48%, #14112e 52%, #25204d 100%);
+            border-color: rgba(56, 189, 248, 0.85);
+            box-shadow: inset 0 2px 5px rgba(255, 255, 255, 0.75),
+                        inset 0 -3px 6px rgba(0, 0, 0, 0.9),
+                        0 12px 35px rgba(56, 189, 248, 0.5),
+                        0 0 40px rgba(56, 189, 248, 0.65);
         }
 
         .turn-on-btn.connected {
-            background: radial-gradient(circle, #0284c7 0%, #059669 100%);
-            border-color: #38ef7d;
+            background: radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 60%),
+                        linear-gradient(180deg, #10b981 0%, #059669 48%, #047857 52%, #065f46 100%);
+            border: 2px solid #6ee7b7;
             color: #ffffff;
-            box-shadow: 0 0 45px rgba(56, 239, 125, 0.65);
+            box-shadow: inset 0 2px 6px rgba(255, 255, 255, 0.9),
+                        inset 0 -3px 6px rgba(0, 0, 0, 0.6),
+                        0 12px 42px rgba(16, 185, 129, 0.7),
+                        0 0 55px rgba(52, 211, 153, 0.8);
         }
 
         .turn-on-btn.connecting {
-            border-color: #facc15;
-            color: #facc15;
-            box-shadow: 0 0 35px rgba(250, 204, 21, 0.55);
+            background: radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 60%),
+                        linear-gradient(180deg, #f59e0b 0%, #d97706 48%, #b45309 52%, #92400e 100%);
+            border: 2px solid #fde68a;
+            color: #ffffff;
+            box-shadow: inset 0 2px 5px rgba(255, 255, 255, 0.85),
+                        0 0 45px rgba(245, 158, 11, 0.7);
         }
 
         .turn-on-text {
             font-weight: 800;
             font-size: 13px;
-            letter-spacing: 1.5px;
+            letter-spacing: 1.6px;
         }
 
         .glass-card {
-            background: rgba(26, 22, 51, 0.75);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: linear-gradient(135deg, rgba(34, 28, 70, 0.75) 0%, rgba(18, 15, 38, 0.88) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2), 0 8px 24px rgba(0, 0, 0, 0.45);
             border-radius: 16px;
             padding: 12px 18px;
         }
@@ -543,8 +625,8 @@ class VPNApplication(Adw.Application):
         }
 
         .server-item-btn {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
             border-radius: 12px;
             padding: 8px 12px;
             margin: 2px 0;
@@ -553,13 +635,14 @@ class VPNApplication(Adw.Application):
         }
 
         .server-item-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(99, 102, 241, 0.5);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
+            border-color: rgba(99, 102, 241, 0.6);
             color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .server-item-btn.selected {
-            background: rgba(99, 102, 241, 0.22);
+            background: rgba(99, 102, 241, 0.25);
             border-color: #6366f1;
         }
 
@@ -709,6 +792,10 @@ class MainWindow(Adw.ApplicationWindow):
     # ---- UI construction --------------------------------------------------
 
 
+
+    def _minimize_to_tray(self) -> None:
+        self.set_visible(False)
+
     def _navigate_to(self, page_id: str) -> None:
         if hasattr(self, "_stack") and self._stack:
             self._stack.set_visible_child_name(page_id)
@@ -724,62 +811,103 @@ class MainWindow(Adw.ApplicationWindow):
         self._toast_overlay = Adw.ToastOverlay()
         self.set_content(self._toast_overlay)
 
-        # Root Horizontal Split: [Left Sidebar] | [Center ViewStack]
-        root_h_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        self._toast_overlay.set_child(root_h_box)
+        # Main Vertical Container
+        main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self._toast_overlay.set_child(main_vbox)
 
-        # ── 1. Left Navigation Sidebar ───────────────────────────────────
+        # ── Draggable Window HeaderBar ───────────────────────────────────
+        header = Adw.HeaderBar()
+        header.add_css_class("aether-header")
+        header.set_show_end_title_buttons(True)
+        header.set_show_start_title_buttons(True)
+
+        # Left branding in HeaderBar
+        header_brand = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        logo_path = "/usr/local/share/wavez-vpn/icons/spizdili-logo.png"
+        if not Path(logo_path).is_file():
+            logo_path = str(Path(__file__).resolve().parent / "icons" / "spizdili-logo.png")
+
+        if Path(logo_path).is_file():
+            h_img = Gtk.Picture.new_for_filename(logo_path)
+            h_img.set_size_request(28, 28)
+            h_img.set_content_fit(Gtk.ContentFit.CONTAIN)
+            header_brand.append(h_img)
+
+        app_title = Gtk.Label()
+        app_title.set_markup("<span weight='heavy' size='11000' color='#ffffff'>SPIZDILI_VPN</span> <span size='9000' color='#818cf8'>Aether</span>")
+        header_brand.append(app_title)
+        header.pack_start(header_brand)
+
+        # Center: Quick View Tabs in HeaderBar
+        self._quick_tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self._quick_tab_box.add_css_class("header-tabs")
+        tab_defs = [("connection", "Подключение"), ("profiles", "Серверы"), ("settings", "Настройки")]
+        self._header_tab_btns = {}
+        for q_id, q_label in tab_defs:
+            q_btn = Gtk.Button(label=q_label)
+            q_btn.add_css_class("header-tab-btn")
+            q_btn.connect("clicked", lambda b, q=q_id: self._navigate_to(q))
+            self._quick_tab_box.append(q_btn)
+            self._header_tab_btns[q_id] = q_btn
+        header.set_title_widget(self._quick_tab_box)
+
+        # Right: Minimize to Tray & Menu
+        tray_btn = Gtk.Button()
+        tray_btn.add_css_class("header-icon-btn")
+        tray_btn.set_tooltip_text("Свернуть в трей")
+        tray_icon_path = "/usr/local/share/wavez-vpn/icons/material/remove.svg"
+        if Path(tray_icon_path).is_file():
+            tray_btn.set_child(Gtk.Image.new_from_file(tray_icon_path))
+        else:
+            tray_btn.set_child(Gtk.Image.new_from_icon_name("window-minimize-symbolic"))
+        tray_btn.connect("clicked", lambda b: self._minimize_to_tray())
+        header.pack_end(tray_btn)
+
+        menu_btn = Gtk.MenuButton()
+        menu_btn.set_icon_name("open-menu-symbolic")
+        menu_btn.add_css_class("header-icon-btn")
+        menu_model = Gio.Menu()
+        menu_model.append("О программе", "app.about")
+        menu_model.append("Свернуть в трей", "app.minimize_tray")
+        menu_model.append("Выход", "app.quit")
+        menu_btn.set_menu_model(menu_model)
+        header.pack_end(menu_btn)
+
+        main_vbox.append(header)
+
+        # ── Body: [Left Sidebar] | [Central ViewStack] ───────────────────
+        body_h_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0, vexpand=True, hexpand=True)
+        main_vbox.append(body_h_box)
+
+        # ── Left Navigation Sidebar ──────────────────────────────────────
         self._sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self._sidebar.add_css_class("sidebar-panel")
-        self._sidebar.set_size_request(200, -1)
+        self._sidebar.set_size_request(210, -1)
 
-        # Mascot & Logo header
-        logo_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        logo_box.set_margin_bottom(18)
-        logo_box.set_margin_top(6)
-        logo_box.set_margin_start(6)
-
-        logo_path = None
-        for candidate in (
-            Path("/usr/local/share/wavez-vpn/icons/spizdili-logo.png"),
-            Path(__file__).resolve().parent / "icons" / "spizdili-logo.png",
-            Path(__file__).resolve().parent.parent / "icons" / "spizdili-logo.png",
-        ):
-            if candidate.is_file():
-                logo_path = str(candidate)
-                break
-
-        if logo_path:
-            logo_img = Gtk.Picture.new_for_filename(logo_path)
-            logo_img.set_size_request(38, 38)
-            logo_img.set_content_fit(Gtk.ContentFit.CONTAIN)
-            logo_box.append(logo_img)
-
-        app_title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        t_lbl = Gtk.Label()
-        t_lbl.set_markup("<span weight='heavy' size='12000' color='#ffffff'>SPIZDILI_VPN</span>")
-        t_lbl.set_halign(Gtk.Align.START)
-        app_title_vbox.append(t_lbl)
-
-        sub_lbl = Gtk.Label()
-        sub_lbl.set_markup("<span size='9500' weight='bold' color='#818cf8'>Aether Edition</span>")
-        sub_lbl.set_halign(Gtk.Align.START)
-        app_title_vbox.append(sub_lbl)
-        logo_box.append(app_title_vbox)
-        self._sidebar.append(logo_box)
-
-        # Nav items
+        # Nav items with Material Design SVGs
         self._nav_buttons = {}
         nav_defs = [
-            ("connection", "📊  Дашборд"),
-            ("profiles", "🌐  Локации"),
-            ("settings", "⚙️  Настройки"),
-            ("logs", "📜  Журнал"),
+            ("connection", "Дашборд", "dashboard.svg"),
+            ("profiles", "Локации", "public.svg"),
+            ("settings", "Настройки", "settings.svg"),
+            ("logs", "Журнал", "terminal.svg"),
         ]
-        for page_id, label_text in nav_defs:
-            btn = Gtk.Button(label=label_text)
+        for page_id, label_text, icon_file in nav_defs:
+            btn = Gtk.Button()
             btn.add_css_class("nav-btn")
             btn.set_halign(Gtk.Align.FILL)
+            
+            btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            icon_p = f"/usr/local/share/wavez-vpn/icons/material/{icon_file}"
+            if Path(icon_p).is_file():
+                img = Gtk.Image.new_from_file(icon_p)
+                img.set_pixel_size(18)
+                btn_box.append(img)
+            
+            lbl = Gtk.Label(label=label_text)
+            btn_box.append(lbl)
+            btn.set_child(btn_box)
+
             btn.connect("clicked", lambda b, pid=page_id: self._navigate_to(pid))
             self._sidebar.append(btn)
             self._nav_buttons[page_id] = btn
@@ -788,7 +916,7 @@ class MainWindow(Adw.ApplicationWindow):
         spacer = Gtk.Box(vexpand=True)
         self._sidebar.append(spacer)
 
-        # Bottom Version & Status
+        # Bottom Version in Sidebar
         bot_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         bot_box.set_margin_bottom(10)
         bot_box.set_margin_start(6)
@@ -798,58 +926,13 @@ class MainWindow(Adw.ApplicationWindow):
         bot_box.append(v_lbl)
         self._sidebar.append(bot_box)
 
-        root_h_box.append(self._sidebar)
+        body_h_box.append(self._sidebar)
 
-        # ── 2. Center Column: Top Header + ViewStack ─────────────────────
-        center_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0, hexpand=True, vexpand=True)
-        root_h_box.append(center_vbox)
-
-        # Modern top bar
-        top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        top_bar.set_margin_start(16)
-        top_bar.set_margin_end(16)
-        top_bar.set_margin_top(12)
-        top_bar.set_margin_bottom(8)
-
-        # Quick Tabs
-        self._quick_tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        self._quick_tab_box.add_css_class("glass-card")
-        self._quick_tab_box.set_valign(Gtk.Align.CENTER)
-        
-        for q_id, q_label in [("connection", "Подключение"), ("profiles", "Серверы"), ("settings", "Настройки")]:
-            q_btn = Gtk.Button(label=q_label)
-            q_btn.add_css_class("nav-btn")
-            q_btn.connect("clicked", lambda b, q=q_id: self._navigate_to(q))
-            self._quick_tab_box.append(q_btn)
-        top_bar.append(self._quick_tab_box)
-
-        top_spacer = Gtk.Box(hexpand=True)
-        top_bar.append(top_spacer)
-
-        # Notification & Menu
-        notif_btn = Gtk.Button()
-        notif_btn.add_css_class("nav-btn")
-        notif_icon = Gtk.Image.new_from_icon_name("preferences-system-notifications-symbolic")
-        notif_btn.set_child(notif_icon)
-        notif_btn.connect("clicked", lambda b: self._show_toast("Все узлы сети в норме (47/47 активны)"))
-        top_bar.append(notif_btn)
-
-        menu_btn = Gtk.MenuButton()
-        menu_btn.set_icon_name("open-menu-symbolic")
-        menu_btn.add_css_class("nav-btn")
-        menu_model = Gio.Menu()
-        menu_model.append("О программе", "app.about")
-        menu_model.append("Выход", "app.quit")
-        menu_btn.set_menu_model(menu_model)
-        top_bar.append(menu_btn)
-
-        center_vbox.append(top_bar)
-
-        # Central View Stack
+        # ── Central View Stack ───────────────────────────────────────────
         self._stack = Adw.ViewStack()
         self._stack.set_vexpand(True)
         self._stack.set_hexpand(True)
-        center_vbox.append(self._stack)
+        body_h_box.append(self._stack)
 
         # Compatibility headers
         self._view_switcher_title = Adw.ViewSwitcherTitle()
@@ -871,27 +954,18 @@ class MainWindow(Adw.ApplicationWindow):
         # Auto-check updates
         GLib.timeout_add_seconds(5, lambda: self._schedule_auto_update_check() or False)
 
-    # ---- Connection page --------------------------------------------------
-
-
-    def _on_turn_on_clicked(self, btn: Gtk.Button) -> None:
-        if self._connected:
-            self._on_disconnect_clicked(btn)
-        else:
-            self._on_connect_clicked(btn)
-
     def _build_connection_page(self) -> None:
         overlay = Gtk.Overlay()
         overlay.set_hexpand(True)
         overlay.set_vexpand(True)
         self._stack.add_titled(overlay, "connection", "Дашборд")
 
-        # Map Background
+        # User-uploaded Map Background Image
         map_path = None
         for candidate in (
-            Path("/usr/local/share/wavez-vpn/icons/world-map-mesh.svg"),
-            Path(__file__).resolve().parent / "icons" / "world-map-mesh.svg",
-            Path(__file__).resolve().parent.parent / "icons" / "world-map-mesh.svg",
+            Path("/usr/local/share/wavez-vpn/icons/world-map-bg.jpg"),
+            Path(__file__).resolve().parent / "icons" / "world-map-bg.jpg",
+            Path(__file__).resolve().parent.parent / "icons" / "world-map-bg.jpg",
         ):
             if candidate.is_file():
                 map_path = str(candidate)
@@ -900,7 +974,7 @@ class MainWindow(Adw.ApplicationWindow):
         if map_path:
             map_pic = Gtk.Picture.new_for_filename(map_path)
             map_pic.set_content_fit(Gtk.ContentFit.COVER)
-            map_pic.set_opacity(0.85)
+            map_pic.set_can_target(False)  # Let mouse clicks pass through
             overlay.set_child(map_pic)
         else:
             dummy_bg = Gtk.Box()
@@ -908,19 +982,27 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Central Foreground Content
         center_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        center_content.set_can_target(True)
         center_content.set_margin_top(20)
         center_content.set_margin_bottom(20)
 
-        # ── BIG CIRCULAR TURN ON BUTTON ──
+        # ── BIG AAA GLOSSY CIRCULAR TURN ON BUTTON ──
         self._turn_on_btn = Gtk.Button()
         self._turn_on_btn.add_css_class("turn-on-btn")
-        self._turn_on_btn.set_size_request(144, 144)
+        self._turn_on_btn.set_size_request(150, 150)
         self._turn_on_btn.set_halign(Gtk.Align.CENTER)
         self._turn_on_btn.connect("clicked", self._on_turn_on_clicked)
 
         btn_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
-        power_icon = Gtk.Image.new_from_icon_name("system-shutdown-symbolic")
-        power_icon.set_pixel_size(44)
+        
+        # Power SVG Icon
+        power_p = "/usr/local/share/wavez-vpn/icons/material/power.svg"
+        if Path(power_p).is_file():
+            power_icon = Gtk.Image.new_from_file(power_p)
+            power_icon.set_pixel_size(44)
+        else:
+            power_icon = Gtk.Image.new_from_icon_name("system-shutdown-symbolic")
+            power_icon.set_pixel_size(44)
         btn_vbox.append(power_icon)
 
         self._turn_on_lbl = Gtk.Label(label="TURN ON")
@@ -949,6 +1031,14 @@ class MainWindow(Adw.ApplicationWindow):
         self._profile_dropdown_row.connect("notify::selected", self._on_profile_dropdown_selected)
         self._selector_group.add(self._profile_dropdown_row)
         center_content.append(self._selector_group)
+
+        # Kill-Switch row (must exist for vpn connection logic)
+        self._killswitch_row = Adw.SwitchRow(
+            title="Kill-Switch",
+            subtitle="Блокировать трафик при обрыве VPN",
+        )
+        self._killswitch_row.connect("notify::active", self._on_killswitch_toggled)
+        self._selector_group.add(self._killswitch_row)
 
         # Bottom Footer Diagnostics Card
         self._footer_dock = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24, halign=Gtk.Align.CENTER)
@@ -989,6 +1079,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._stats_group.set_visible(False)
 
         overlay.add_overlay(center_content)
+
 
     # ---- Profiles page ----------------------------------------------------
 
@@ -2099,7 +2190,10 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_connect_clicked(self, button: Gtk.Button) -> None:
         selected = self._profile_dropdown_row.get_selected()
-        if selected == Gtk.INVALID_LIST_POSITION or not self._profile_names:
+        if (selected == Gtk.INVALID_LIST_POSITION or not self._profile_names) and hasattr(self, "_profile_names") and self._profile_names:
+            selected = 0
+            self._profile_dropdown_row.set_selected(0)
+        if selected == Gtk.INVALID_LIST_POSITION or not getattr(self, "_profile_names", None):
             self._show_toast("Профиль не выбран")
             return
         profile_name = self._profile_names[selected]
@@ -2112,7 +2206,7 @@ class MainWindow(Adw.ApplicationWindow):
         if self._connecting:
             return
         self._set_connecting_state(True)
-        enable_ks = self._killswitch_row.get_active()
+        enable_ks = self._killswitch_row.get_active() if hasattr(self, '_killswitch_row') and self._killswitch_row else False
 
         def worker() -> None:
             success, msg = self.vpn.connect(profile_name, enable_killswitch=enable_ks)
@@ -2131,7 +2225,7 @@ class MainWindow(Adw.ApplicationWindow):
                 self._profile_dropdown_row.set_selected(idx)
                 self.cfg.set_last_connected(profile_name)
             self._connect_time = time.time()
-            self._killswitch_enabled = self._killswitch_row.get_active()
+            self._killswitch_enabled = self._killswitch_row.get_active() if hasattr(self, '_killswitch_row') and self._killswitch_row else False
             self._update_connection_ui()
             self._start_stats_timer()
             self._show_toast(f"Подключено к «{profile_name}»")
@@ -2392,14 +2486,9 @@ class MainWindow(Adw.ApplicationWindow):
     # ---- Window close behavior --------------------------------------------
 
     def _on_close_request(self, window: Adw.ApplicationWindow) -> bool:
-        tray = self.app.get_tray()
-        min_to_tray = self.settings.get("minimize_to_tray", True)
-        if tray and _HAS_APPINDICATOR and min_to_tray:
-            self.set_visible(False)
-            return True  # prevent destruction, hide to tray
-        # No tray or minimize_to_tray disabled — actually quit
-        self.shutdown()
-        return False
+        # Hide window to tray on close button click
+        self.set_visible(False)
+        return True  # prevent destruction, keep running in background
 
     def shutdown(self) -> None:
         """Graceful shutdown: disconnect VPN, stop timers."""
@@ -2452,6 +2541,10 @@ class EditConfigDialog(Adw.Window):
         self._config_manager = config_manager
         self._build_ui()
 
+
+
+    def _minimize_to_tray(self) -> None:
+        self.set_visible(False)
 
     def _navigate_to(self, page_id: str) -> None:
         if hasattr(self, "_stack") and self._stack:
@@ -2645,6 +2738,10 @@ class SubscriptionImportDialog(Adw.Window):
         self._lat_labels: list[Gtk.Label] = []
         self._build_ui()
 
+
+
+    def _minimize_to_tray(self) -> None:
+        self.set_visible(False)
 
     def _navigate_to(self, page_id: str) -> None:
         if hasattr(self, "_stack") and self._stack:
@@ -2950,6 +3047,10 @@ class ProfileHealthDialog(Adw.Window):
         self._build_ui()
         self._run_check()
 
+
+
+    def _minimize_to_tray(self) -> None:
+        self.set_visible(False)
 
     def _navigate_to(self, page_id: str) -> None:
         if hasattr(self, "_stack") and self._stack:

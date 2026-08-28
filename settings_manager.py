@@ -55,7 +55,6 @@ INCY_DEFAULTS: dict[str, Any] = {
     "app_language": "ru",
     "ai_optimization": True,
     "ai_env_proxy": True,
-    "auto_check_updates": True,
 }
 
 

@@ -36,17 +36,9 @@ from subscription_parser import ParsedServer, SubscriptionParser  # noqa: E402
 from health_checker import ConfigHealthChecker, HealthReport  # noqa: E402
 
 try:
-    from version import __version__ as APP_VERSION, GITHUB_REPO_URL
+    import updater as _updater
 except ImportError:
-    APP_VERSION = "1.0.3"
-    GITHUB_REPO_URL = "https://github.com/newiziwavez33-hub/spizdili_vpn"
-
-try:
-    from updater import default_updater, UpdateInfo, is_newer_version
-except ImportError:
-    default_updater = None
-    UpdateInfo = None
-    is_newer_version = lambda a, b: False
+    _updater = None  # type: ignore
 
 __all__ = ["VPNApplication"]
 
@@ -387,7 +379,6 @@ class VPNApplication(Adw.Application):
         actions = {
             "quit": self._on_quit,
             "about": self._on_about,
-            "check-updates": self._on_check_updates,
             "connect-last": self._on_connect_last,
         }
         for name, callback in actions.items():
@@ -469,19 +460,15 @@ class VPNApplication(Adw.Application):
         about = Adw.AboutWindow(
             application_name="SPIZDILI_VPN",
             application_icon="network-vpn",
-            version=APP_VERSION,
-            developer_name="SPIZDILI VPN Team",
+            version="1.0.3",
+            developer_name="WaveZ Team",
             license_type=Gtk.License.GPL_3_0,
             comments="Fast & Secure VPN client with VLESS Reality, WireGuard and AmneziaWG support",
-            website=GITHUB_REPO_URL,
-            developers=["SPIZDILI VPN Team"],
+            website="https://github.com/wavez-vpn/wavez-vpn-client",
+            developers=["WaveZ Team"],
             transient_for=self._window,
         )
         about.present()
-
-    def _on_check_updates(self, action: Gio.SimpleAction, param: Any) -> None:
-        if self._window:
-            self._window._check_updates_async(manual=True)
 
     def _on_connect_last(self, action: Gio.SimpleAction, param: Any) -> None:
         if self._window:
@@ -533,10 +520,6 @@ class MainWindow(Adw.ApplicationWindow):
         # Check if already connected (e.g. app restart)
         GLib.timeout_add(500, self._initial_status_check)
 
-        # Check updates automatically if enabled in settings
-        if self.settings.get("auto_check_updates", True):
-            GLib.timeout_add(1800, self._auto_check_updates_startup)
-
         self.connect("close-request", self._on_close_request)
 
     # ---- UI construction --------------------------------------------------
@@ -560,7 +543,6 @@ class MainWindow(Adw.ApplicationWindow):
         menu_btn = Gtk.MenuButton()
         menu_btn.set_icon_name("open-menu-symbolic")
         menu_model = Gio.Menu()
-        menu_model.append("Проверить обновления", "app.check-updates")
         menu_model.append("О программе", "app.about")
         menu_model.append("Выход", "app.quit")
         menu_btn.set_menu_model(menu_model)
@@ -578,6 +560,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._build_profiles_page()
         self._build_logs_page()
         self._build_settings_page()
+        # Auto-check updates 5s after start
+        GLib.timeout_add_seconds(5, lambda: self._schedule_auto_update_check() or False)
 
     # ---- Connection page --------------------------------------------------
 
@@ -1042,45 +1026,33 @@ class MainWindow(Adw.ApplicationWindow):
 
         inner.append(incy_group)
 
-        # ── Group 5: Updates & Releases ───────────────────────────────────
-        updates_group = Adw.PreferencesGroup(
-            title="🔄 Обновления (GitHub Releases)",
-            description="Автоматическая проверка и загрузка обновлений из официального репозитория",
+        # ── Updates group ─────────────────────────────────────────────────
+        upd_group = Adw.PreferencesGroup(
+            title="🔄 Обновления",
+            description="Автоматическое и ручное обновление из GitHub Releases",
         )
-
-        ver_row = Adw.ActionRow(
-            title="Текущая версия",
-            subtitle=f"v{APP_VERSION} (newiziwavez33-hub/spizdili_vpn)",
-        )
-        self._update_status_badge = Gtk.Label(label=f"v{APP_VERSION}")
-        self._update_status_badge.add_css_class("badge-wg")
-        ver_row.add_suffix(self._update_status_badge)
-        updates_group.add(ver_row)
-
-        self._auto_update_row = Adw.SwitchRow(
-            title="Автоматическая проверка обновлений",
-            subtitle="Проверять наличие новых версий на GitHub при запуске",
-        )
-        self._auto_update_row.set_active(self.settings.get("auto_check_updates", True))
-        self._auto_update_row.connect(
-            "notify::active",
-            lambda r, _: self.settings.set("auto_check_updates", r.get_active()),
-        )
-        updates_group.add(self._auto_update_row)
 
         check_row = Adw.ActionRow(
-            title="Проверить обновления",
-            subtitle="Запросить последнюю версию и релизные пакеты с GitHub",
+            title="Проверить наличие обновлений",
+            subtitle="Сравнить текущую версию с последним релизом на GitHub",
         )
-        self._check_update_btn = Gtk.Button(label="Проверить сейчас")
-        self._check_update_btn.add_css_class("suggested-action")
-        self._check_update_btn.add_css_class("pill")
-        self._check_update_btn.set_valign(Gtk.Align.CENTER)
-        self._check_update_btn.connect("clicked", lambda _: self._check_updates_async(manual=True))
-        check_row.add_suffix(self._check_update_btn)
-        updates_group.add(check_row)
+        self._upd_check_btn = Gtk.Button(label="Проверить сейчас")
+        self._upd_check_btn.add_css_class("suggested-action")
+        self._upd_check_btn.add_css_class("pill")
+        self._upd_check_btn.set_valign(Gtk.Align.CENTER)
+        self._upd_check_btn.connect("clicked", self._on_check_update_clicked)
+        check_row.add_suffix(self._upd_check_btn)
+        upd_group.add(check_row)
 
-        inner.append(updates_group)
+        auto_row = Adw.SwitchRow(
+            title="Автопроверка при запуске",
+            subtitle="Проверять обновления автоматически при каждом запуске",
+        )
+        self._auto_upd_switch = auto_row
+        auto_row.set_active(True)
+        upd_group.add(auto_row)
+
+        inner.append(upd_group)
 
     def _on_import_incy_servers_clicked(self, button: Gtk.Button) -> None:
         from incy_importer import IncyImporter
@@ -1831,262 +1803,6 @@ class MainWindow(Adw.ApplicationWindow):
     def _show_toast(self, message: str, timeout: int = 3) -> None:
         toast = Adw.Toast(title=message, timeout=timeout)
         self._toast_overlay.add_toast(toast)
-
-    # ---- Updates ----------------------------------------------------------
-
-    def _auto_check_updates_startup(self) -> bool:
-        self._check_updates_async(manual=False)
-        return False
-
-    def _check_updates_async(self, manual: bool = False) -> None:
-        if default_updater is None:
-            if manual:
-                self._show_toast("Модуль автообновления недоступен")
-            return
-
-        if manual:
-            self._show_toast("Проверка обновлений на GitHub...")
-
-        def _worker():
-            try:
-                info = default_updater.check_for_updates()
-            except Exception as exc:
-                logger.warning("Error checking for updates: %s", exc)
-                info = None
-            GLib.idle_add(self._on_update_check_result, info, manual)
-
-        threading.Thread(target=_worker, daemon=True).start()
-
-    def _on_update_check_result(self, info: Optional[Any], manual: bool) -> bool:
-        if info is None:
-            if manual:
-                self._show_toast("Не удалось связаться с GitHub Releases")
-            return False
-
-        if info.has_update:
-            if hasattr(self, "_update_status_badge"):
-                self._update_status_badge.set_label(f"Новая: v{info.latest_version}")
-                self._update_status_badge.remove_css_class("badge-wg")
-                self._update_status_badge.add_css_class("latency-medium")
-            dialog = UpdateDialog(self, info)
-            dialog.present()
-        else:
-            if hasattr(self, "_update_status_badge"):
-                self._update_status_badge.set_label(f"v{APP_VERSION} (Актуальная)")
-                self._update_status_badge.remove_css_class("latency-medium")
-                self._update_status_badge.add_css_class("badge-wg")
-            if manual:
-                self._show_toast(f"У вас установлена последняя версия (v{APP_VERSION})")
-        return False
-
-
-# ---------------------------------------------------------------------------
-# UpdateDialog — GitHub Releases update and auto-install dialog
-# ---------------------------------------------------------------------------
-
-
-class UpdateDialog(Adw.Window):
-    """Dialog displaying release notes and 1-click update installation for Linux."""
-
-    def __init__(self, parent: Gtk.Window, info: Any) -> None:
-        super().__init__(
-            transient_for=parent,
-            modal=True,
-            title="Обновление SPIZDILI_VPN",
-            default_width=520,
-            default_height=460,
-        )
-        self.info = info
-        self.parent_win = parent
-        self._build_ui()
-
-    def _build_ui(self) -> None:
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.set_content(box)
-
-        # Header bar
-        header = Adw.HeaderBar()
-        box.append(header)
-
-        clamp = Adw.Clamp(maximum_size=480)
-        clamp.set_vexpand(True)
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        content_box.set_margin_top(16)
-        content_box.set_margin_bottom(20)
-        content_box.set_margin_start(20)
-        content_box.set_margin_end(20)
-        clamp.set_child(content_box)
-        box.append(clamp)
-
-        # Title / Banner
-        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        title_lbl = Gtk.Label(
-            label=f"🎉 Доступна новая версия v{self.info.latest_version}!",
-            css_classes=["title-2"],
-        )
-        title_box.append(title_lbl)
-
-        sub_text = f"Текущая версия: v{self.info.current_version}"
-        if self.info.published_at:
-            sub_text += f" • Выпущено: {self.info.published_at[:10]}"
-        sub_lbl = Gtk.Label(label=sub_text, css_classes=["dim-label", "caption"])
-        title_box.append(sub_lbl)
-        content_box.append(title_box)
-
-        # Changelog / Release Notes
-        notes_group = Adw.PreferencesGroup(title="Что нового:")
-        notes_scrolled = Gtk.ScrolledWindow(
-            min_content_height=130,
-            max_content_height=200,
-            hscrollbar_policy=Gtk.PolicyType.NEVER,
-        )
-        notes_scrolled.add_css_class("card")
-
-        notes_text = self.info.release_notes or self.info.title or "Официальный релиз с новыми улучшениями и серверами."
-        notes_lbl = Gtk.Label(
-            label=notes_text,
-            wrap=True,
-            xalign=0,
-            yalign=0,
-            selectable=True,
-        )
-        notes_lbl.set_margin_top(12)
-        notes_lbl.set_margin_bottom(12)
-        notes_lbl.set_margin_start(14)
-        notes_lbl.set_margin_end(14)
-        notes_scrolled.set_child(notes_lbl)
-        notes_group.add(notes_scrolled)
-        content_box.append(notes_group)
-
-        # Progress / Status Section
-        self._status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self._status_lbl = Gtk.Label(label="", css_classes=["dim-label", "caption"])
-        self._progress_bar = Gtk.ProgressBar()
-        self._progress_bar.set_show_text(True)
-        self._status_box.append(self._status_lbl)
-        self._status_box.append(self._progress_bar)
-        self._status_box.set_visible(False)
-        content_box.append(self._status_box)
-
-        # Action Buttons Box
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        btn_box.set_margin_top(8)
-
-        self._btn_install = Gtk.Button(label="⚡ Скачать и установить обновление (.deb)")
-        self._btn_install.add_css_class("suggested-action")
-        self._btn_install.add_css_class("pill")
-        self._btn_install.connect("clicked", self._on_start_install)
-        btn_box.append(self._btn_install)
-
-        secondary_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        secondary_box.set_homogeneous(True)
-
-        btn_github = Gtk.Button(label="🌐 Открыть на GitHub")
-        btn_github.add_css_class("flat")
-        btn_github.add_css_class("pill")
-        btn_github.connect("clicked", lambda _: Gio.AppInfo.launch_default_for_uri(self.info.release_url, None))
-        secondary_box.append(btn_github)
-
-        btn_close = Gtk.Button(label="Позже")
-        btn_close.add_css_class("flat")
-        btn_close.add_css_class("pill")
-        btn_close.connect("clicked", lambda _: self.close())
-        secondary_box.append(btn_close)
-
-        btn_box.append(secondary_box)
-        content_box.append(btn_box)
-
-    def _on_start_install(self, btn: Gtk.Button) -> None:
-        self._btn_install.set_sensitive(False)
-        self._status_box.set_visible(True)
-        self._status_lbl.set_text("Подготовка к скачиванию...")
-        self._progress_bar.set_fraction(0.0)
-
-        def _download_task():
-            deb_url = self.info.deb_asset_url
-            if not deb_url:
-                for a in getattr(self.info, "all_assets", []):
-                    if a.get("name", "").endswith(".deb"):
-                        deb_url = a.get("browser_download_url")
-                        break
-
-            if not deb_url:
-                if (Path(__file__).resolve().parent / ".git").is_dir():
-                    GLib.idle_add(self._status_lbl.set_text, "Обновление через git pull...")
-                    ok, msg = default_updater.update_from_git()
-                    GLib.idle_add(self._on_install_finished, ok, msg)
-                    return
-                GLib.idle_add(self._on_install_finished, False, "Пакет .deb не найден в релизе. Откройте страницу на GitHub.")
-                return
-
-            dest_deb = Path(tempfile.gettempdir()) / f"spizdili-vpn_{self.info.latest_version}_amd64.deb"
-            GLib.idle_add(self._status_lbl.set_text, f"Скачивание {self.info.deb_asset_name or 'spizdili-vpn.deb'}...")
-
-            def _progress(dl: int, total: int):
-                if total > 0:
-                    frac = min(1.0, dl / total)
-                    mb_dl = dl / (1024 * 1024)
-                    mb_tot = total / (1024 * 1024)
-                    GLib.idle_add(self._update_progress_ui, frac, f"Скачивание: {mb_dl:.1f} / {mb_tot:.1f} MB ({int(frac*100)}%)")
-
-            ok = default_updater.download_file(deb_url, dest_deb, progress_cb=_progress)
-            if not ok:
-                GLib.idle_add(self._on_install_finished, False, "Не удалось скачать пакет обновления.")
-                return
-
-            GLib.idle_add(self._status_lbl.set_text, "Установка пакета (требуются права администратора)...")
-
-            success, msg = default_updater.install_linux_deb(dest_deb)
-            GLib.idle_add(self._on_install_finished, success, msg)
-
-        threading.Thread(target=_download_task, daemon=True).start()
-
-    def _update_progress_ui(self, frac: float, text: str) -> None:
-        self._progress_bar.set_fraction(frac)
-        self._progress_bar.set_text(f"{int(frac*100)}%")
-        self._status_lbl.set_text(text)
-
-    def _on_install_finished(self, success: bool, msg: str) -> None:
-        self._btn_install.set_sensitive(True)
-        if success:
-            self._status_lbl.set_text("✓ Обновление успешно установлено!")
-            self._progress_bar.set_fraction(1.0)
-            self._progress_bar.set_text("100%")
-
-            dialog = Adw.MessageDialog(
-                transient_for=self,
-                heading="Обновление установлено",
-                body=f"Версия v{self.info.latest_version} успешно установлена в систему.\nПерезапустить приложение прямо сейчас?",
-            )
-            dialog.add_response("later", "Позже")
-            dialog.add_response("restart", "Перезапустить")
-            dialog.set_response_appearance("restart", Adw.ResponseAppearance.SUGGESTED)
-
-            def _on_resp(d: Adw.MessageDialog, resp: str):
-                if resp == "restart":
-                    try:
-                        if self.parent_win and hasattr(self.parent_win, "vpn"):
-                            self.parent_win.vpn.disconnect()
-                    except Exception:
-                        pass
-                    if Path("/usr/local/bin/spizdili-vpn").is_file():
-                        subprocess.Popen(["/usr/local/bin/spizdili-vpn"])
-                    else:
-                        subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / "main.py")] + sys.argv[1:])
-                    if self.parent_win and hasattr(self.parent_win, "app"):
-                        self.parent_win.app.quit()
-                    else:
-                        sys.exit(0)
-                else:
-                    self.close()
-
-            dialog.connect("response", _on_resp)
-            dialog.present()
-        else:
-            self._status_lbl.set_text(f"❌ Ошибка: {msg}")
-            toast = Adw.Toast(title=f"Ошибка установки: {msg}", timeout=5)
-            if hasattr(self.parent_win, "_toast_overlay"):
-                self.parent_win._toast_overlay.add_toast(toast)
 
 
 # ---------------------------------------------------------------------------

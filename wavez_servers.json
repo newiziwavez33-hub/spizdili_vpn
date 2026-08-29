@@ -1,5 +1,5 @@
 {
-  "count": 47,
+  "count": 46,
   "servers": [
     {
       "id": "2c63c21f-4e34-42d0-b7fe-a3107a60b145",
@@ -879,29 +879,6 @@
       "country": "Сингапур",
       "city": "Сингапур",
       "real_country_code": "SG"
-    },
-    {
-      "id": "cloud-reality-10",
-      "name": "⚡ Облако #34 • 🇰🇷 Южная Корея (Сеул)",
-      "ascii_name": "Cloud-10",
-      "protocol": "VLESS",
-      "address": "kghgalybqwqqnqnbdb.jiedddym.com",
-      "port": 25636,
-      "uuid": "0234cdd9-35ee-40a5-b698-9820f09a04f5",
-      "public_key": "3q6CuhLN7vMBISVK5PGjjlGKrRlub5VerIonNSL4c1o",
-      "sni": "www.apple.com",
-      "short_id": "f34d0b76b7af0199",
-      "flow": "xtls-rprx-vision",
-      "fingerprint": "chrome",
-      "security": "reality",
-      "network": "tcp",
-      "latency": 2137,
-      "uri": "vless://0234cdd9-35ee-40a5-b698-9820f09a04f5@kghgalybqwqqnqnbdb.jiedddym.com:25636?&security=reality&flow=xtls-rprx-vision&pbk=3q6CuhLN7vMBISVK5PGjjlGKrRlub5VerIonNSL4c1o&sid=f34d0b76b7af0199&fp=chrome&sni=www.apple.com&type=tcp&headerType=none&host=www.apple.com&path=%2F#%F0%9F%87%B0%F0%9F%87%B7%20%E9%9F%A9%E5%9B%BD%20%7C%20KOR",
-      "full_config_json": "{\"log\": {\"loglevel\": \"warning\"}, \"outbounds\": [{\"protocol\": \"vless\", \"tag\": \"proxy\", \"settings\": {\"vnext\": [{\"address\": \"kghgalybqwqqnqnbdb.jiedddym.com\", \"port\": 25636, \"users\": [{\"id\": \"0234cdd9-35ee-40a5-b698-9820f09a04f5\", \"encryption\": \"none\", \"flow\": \"xtls-rprx-vision\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"www.apple.com\", \"publicKey\": \"3q6CuhLN7vMBISVK5PGjjlGKrRlub5VerIonNSL4c1o\", \"shortId\": \"f34d0b76b7af0199\", \"fingerprint\": \"chrome\"}}}, {\"protocol\": \"freedom\", \"tag\": \"direct\"}, {\"protocol\": \"blackhole\", \"tag\": \"block\"}], \"dns\": {\"servers\": [\"https://1.1.1.1/dns-query\", \"8.8.8.8\", \"1.1.1.1\"], \"queryStrategy\": \"UseIPv4\"}}",
-      "flag": "🇰🇷",
-      "country": "Южная Корея",
-      "city": "Сеул",
-      "real_country_code": "KR"
     },
     {
       "id": "632139fe-7af5-439a-80a6-205037f473e7",

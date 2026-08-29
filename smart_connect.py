@@ -102,3 +102,24 @@ class TunnelHealthMonitor:
                 break
 
             time.sleep(self.check_interval)
+
+
+def filter_only_working_servers(servers: List[Dict[str, Any]], timeout: float = 1.5) -> List[Dict[str, Any]]:
+    """Concurrently check servers and strictly exclude all dead/unreachable ones."""
+    if not servers:
+        return []
+    working = []
+    with ThreadPoolExecutor(max_workers=min(len(servers), 30)) as executor:
+        future_map = {executor.submit(ping_server, srv, timeout): srv for srv in servers}
+        for future in as_completed(future_map):
+            srv = future_map[future]
+            try:
+                lat = future.result()
+                if lat is not None:
+                    srv["ping"] = lat
+                    working.append(srv)
+            except Exception:
+                pass
+    # Sort by ping latency (lowest first)
+    working.sort(key=lambda s: s.get("ping", 9999))
+    return working

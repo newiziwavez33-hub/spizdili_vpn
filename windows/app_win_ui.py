@@ -777,9 +777,35 @@ class SpizdiliVPNApp:
 
     def _select_server_and_return(self, srv: dict[str, Any]) -> None:
         self.active_server = srv
-        self.conn_canvas.itemconfig(self.canvas_server_pill, text=f"🌐 {srv.get('name', 'Сервер')}")
+        name = srv.get('name', 'Сервер')
+        self.conn_canvas.itemconfig(self.canvas_server_pill, text=f"🌐 {name}")
         self._populate_server_cards(self.search_var.get())
         self.navigate_to("connection")
+        # Instant switch on selection!
+        if self.connected:
+            self._reconnect_to_server(srv)
+        else:
+            self._connect()
+
+    def _reconnect_to_server(self, srv: dict[str, Any]) -> None:
+        if self.connecting:
+            return
+        self.connecting = True
+        self.conn_canvas.itemconfig(self.canvas_status_text, text="🟡 ПЕРЕКЛЮЧЕНИЕ…", fill="#fbbf24")
+        self.conn_canvas.itemconfig(self.canvas_subtitle_text, text=f"Мгновенное переключение на {srv.get('name')}…")
+        self._log(f"[{time.strftime('%H:%M:%S')}] [SWITCH] Switching server to '{srv.get('name')}'...")
+
+        def worker() -> None:
+            self.xray.stop()
+            ok, msg = self.xray.start(srv)
+            if ok:
+                WindowsProxyManager.enable_proxy("127.0.0.1", self.xray.current_http_port, self.xray.current_socks_port)
+                self.root.after(0, self._on_connect_success)
+            else:
+                WindowsProxyManager.disable_proxy()
+                self.root.after(0, self._on_connect_failed, msg)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # ── Page 3: Settings Page ────────────────────────────────────────────────
     def _build_settings_page(self) -> tk.Frame:
@@ -1016,28 +1042,133 @@ class SpizdiliVPNApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    # ── Server Actions (WARP, Harvest, Speedtest, Parallel Ping) ──────────────
+
+    def _harvest_fresh_servers_async(self) -> None:
+        """Fetch and strictly filter working [FRESH] servers."""
+        self._log(f"[{time.strftime('%H:%M:%S')}] [FRESH] Scanning community feeds for working servers...")
+        if hasattr(self, "lbl_page_speed_status"):
+            self.lbl_page_speed_status.config(text="🔍 Поиск и проверка [FRESH] серверов...")
+
+        def worker():
+            try:
+                import harvester
+                fresh = harvester.fetch_fresh_servers(max_count=10, timeout=3.0)
+                if fresh:
+                    new_list = fresh + [s for s in self.servers if not s.get("id", "").startswith("harv_")]
+                    self.servers = new_list
+                    self.root.after(0, lambda: self._populate_server_cards(self.search_var.get()))
+                    self.root.after(0, lambda: messagebox.showinfo("Радар серверов", f"✓ Найдено и проверено {len(fresh)} рабочих серверов [FRESH]!\nНеработающие узлы автоматически отфильтрованы."))
+                    self.root.after(0, lambda: self._log(f"[{time.strftime('%H:%M:%S')}] [FRESH] Added {len(fresh)} verified working servers."))
+                else:
+                    self.root.after(0, lambda: messagebox.showwarning("Радар серверов", "Все проверенные внешние узлы были недоступны."))
+            except Exception as exc:
+                self.root.after(0, lambda: self._log(f"[{time.strftime('%H:%M:%S')}] [ERROR] Harvest error: {exc}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _create_personal_warp(self) -> None:
+        """Generate unlimited personal Cloudflare WARP account."""
+        self._log(f"[{time.strftime('%H:%M:%S')}] [WARP] Generating personal Cloudflare WARP WireGuard profile...")
+        if hasattr(self, "lbl_page_speed_status"):
+            self.lbl_page_speed_status.config(text="Генерация личного WARP ключа...")
+
+        def worker():
+            try:
+                import warp_service
+                warp = warp_service.generate_warp_profile()
+                if warp:
+                    self.servers.insert(0, warp)
+                    self.active_server = warp
+                    self.root.after(0, lambda: self.conn_canvas.itemconfig(self.canvas_server_pill, text=f"🌐 {warp.get('name')}"))
+                    self.root.after(0, lambda: self._populate_server_cards(self.search_var.get()))
+                    self.root.after(0, lambda: messagebox.showinfo("Личный WARP", "✓ Личный WireGuard аккаунт Cloudflare WARP успешно создан и выбран!"))
+                    self.root.after(0, lambda: self._log(f"[{time.strftime('%H:%M:%S')}] [WARP] Personal WireGuard profile created!"))
+                else:
+                    self.root.after(0, lambda: messagebox.showerror("Ошибка WARP", "Не удалось связаться с Cloudflare API"))
+            except Exception as exc:
+                self.root.after(0, lambda: self._log(f"[{time.strftime('%H:%M:%S')}] [ERROR] WARP error: {exc}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _run_speedtest_async(self) -> None:
+        """Measure real download throughput."""
+        self._log(f"[{time.strftime('%H:%M:%S')}] [SPEED] Running Cloudflare CDN speedtest...")
+        if hasattr(self, "lbl_page_speed_val"):
+            self.lbl_page_speed_val.config(text="Замер...", fg="#fbbf24")
+            self.lbl_page_speed_status.config(text="Скачивание тестового пакета Cloudflare...", fg="#fbbf24")
+        self.lbl_metric_ping.config(text="Замер...", fg="#38bdf8")
+
+        def worker():
+            try:
+                import speedtest_service
+                mbps = speedtest_service.run_speed_test()
+                def done():
+                    if mbps > 0:
+                        if hasattr(self, "lbl_page_speed_val"):
+                            self.lbl_page_speed_val.config(text=f"{mbps} Мбит/с", fg="#38ef7d")
+                            self.lbl_page_speed_status.config(text=f"✓ Скорость туннеля: {mbps} Мбит/с", fg="#38ef7d")
+                        self.lbl_metric_ping.config(text=f"{mbps} Мбит/с", fg="#38ef7d")
+                        self._log(f"[{time.strftime('%H:%M:%S')}] [SPEED] Result: {mbps} Mbps")
+                    else:
+                        if hasattr(self, "lbl_page_speed_status"):
+                            self.lbl_page_speed_status.config(text="Ошибка замера. Проверьте активность VPN.", fg="#ef4444")
+                        self.lbl_metric_ping.config(text="—", fg="#ef4444")
+                self.root.after(0, done)
+            except Exception as exc:
+                self.root.after(0, lambda: self._log(f"[{time.strftime('%H:%M:%S')}] [ERROR] Speedtest error: {exc}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _ping_all_servers_async(self) -> None:
-        """Batch ping all servers in background thread."""
-        self._log(f"[{time.strftime('%H:%M:%S')}] [PING] Starting batch latency check for all servers...")
+        """Batch ping all servers in parallel and strictly exclude dead ones!"""
+        self._log(f"[{time.strftime('%H:%M:%S')}] [PING] Parallel health-checking servers...")
 
         def worker() -> None:
-            for s in self.servers:
+            import concurrent.futures
+            alive_servers = []
+            dead_count = 0
+
+            def check(s):
                 name = s.get("name")
                 addr = s.get("address")
                 port = s.get("port", 443)
                 t0 = time.time()
                 try:
-                    sock = socket.create_connection((addr, port), timeout=2.0)
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(1.5)
+                    if sock.connect_ex((addr, int(port))) == 0:
+                        sock.close()
+                        dt = int((time.time() - t0) * 1000)
+                        return (s, dt)
                     sock.close()
-                    dt = int((time.time() - t0) * 1000)
-                    self.latencies[name] = f"⚡ {dt} мс"
                 except Exception:
-                    self.latencies[name] = "⚡ —"
+                    pass
+                return (s, None)
 
-            self.root.after(0, lambda: self._populate_server_cards(self.search_var.get()))
-            self.root.after(0, lambda: self._log(f"[{time.strftime('%H:%M:%S')}] [PING] Batch check complete!"))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=25) as ex:
+                results = list(ex.map(check, self.servers))
+
+            for s, dt in results:
+                name = s.get("name")
+                if dt is not None:
+                    self.latencies[name] = f"⚡ {dt} мс"
+                    alive_servers.append(s)
+                else:
+                    dead_count += 1
+
+            if alive_servers:
+                self.servers = alive_servers
+
+            def update_ui():
+                self._populate_server_cards(self.search_var.get())
+                self._log(f"[{time.strftime('%H:%M:%S')}] [PING] Audit complete: {len(alive_servers)} active, {dead_count} dead excluded!")
+                messagebox.showinfo("Аудит серверов", f"✓ Проверено серверов: {len(results)}\nАктивных: {len(alive_servers)}\nНеработающих исключено: {dead_count}")
+
+            self.root.after(0, update_ui)
 
         threading.Thread(target=worker, daemon=True).start()
+
 
     def _import_conf_file(self) -> None:
         """File chooser dialog to import .conf file."""

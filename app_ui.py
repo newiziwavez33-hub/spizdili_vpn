@@ -1078,6 +1078,31 @@ class MainWindow(Adw.ApplicationWindow):
         self._selector_group.add(self._profile_dropdown_row)
         center_content.append(self._selector_group)
 
+        # Quick Action Buttons on Main Dashboard
+        quick_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, halign=Gtk.Align.CENTER)
+        quick_actions_box.set_margin_top(6)
+
+        self._dash_warp_btn = Gtk.Button(label="🛡️ Личный WARP")
+        self._dash_warp_btn.add_css_class("suggested-action")
+        self._dash_warp_btn.add_css_class("pill")
+        self._dash_warp_btn.set_tooltip_text("Создать личный бесплатный WireGuard сервер Cloudflare в 1 клик")
+        self._dash_warp_btn.connect("clicked", self._on_create_personal_warp_clicked)
+        quick_actions_box.append(self._dash_warp_btn)
+
+        self._dash_harv_btn = Gtk.Button(label="🔄 Свежие сервера")
+        self._dash_harv_btn.add_css_class("pill")
+        self._dash_harv_btn.set_tooltip_text("Скачать свежие рабочие VLESS Reality серверы из сети")
+        self._dash_harv_btn.connect("clicked", self._on_fetch_cloud_servers_clicked)
+        quick_actions_box.append(self._dash_harv_btn)
+
+        self._dash_speed_btn = Gtk.Button(label="🚀 Тест скорости")
+        self._dash_speed_btn.add_css_class("pill")
+        self._dash_speed_btn.set_tooltip_text("Замерить реальную скорость туннеля (Мбит/с)")
+        self._dash_speed_btn.connect("clicked", self._on_run_speedtest_clicked)
+        quick_actions_box.append(self._dash_speed_btn)
+
+        center_content.append(quick_actions_box)
+
         # Kill-Switch row (must exist for vpn connection logic)
         self._killswitch_row = Adw.SwitchRow(
             title="Kill-Switch",
@@ -1191,6 +1216,35 @@ class MainWindow(Adw.ApplicationWindow):
         self._profiles_group.set_header_suffix(header_box)
 
         # Interactive Search Entry for instant real-time filtering
+        # ── Smart Features Banner (WARP / Harvest / Speed) ───────────────
+        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.0")
+
+        warp_row = Adw.ActionRow(title="🛡️ Личный Cloudflare WARP", subtitle="Бесплатный персональный гигабитный сервер без ограничений")
+        self._btn_warp_create = Gtk.Button(label="Создать")
+        self._btn_warp_create.add_css_class("suggested-action")
+        self._btn_warp_create.set_valign(Gtk.Align.CENTER)
+        self._btn_warp_create.connect("clicked", self._on_create_personal_warp_clicked)
+        warp_row.add_suffix(self._btn_warp_create)
+        smart_group.add(warp_row)
+
+        harv_row = Adw.ActionRow(title="🔄 Свежие сервера из сети", subtitle="Авто-поиск и добавление рабочих VLESS Reality серверов")
+        btn_harv_fetch = Gtk.Button(label="Обновить")
+        btn_harv_fetch.add_css_class("pill")
+        btn_harv_fetch.set_valign(Gtk.Align.CENTER)
+        btn_harv_fetch.connect("clicked", self._on_fetch_cloud_servers_clicked)
+        harv_row.add_suffix(btn_harv_fetch)
+        smart_group.add(harv_row)
+
+        speed_row = Adw.ActionRow(title="🚀 Тест скорости загрузки", subtitle="Замер реальной пропускной способности туннеля (Мбит/с)")
+        self._speed_btn = Gtk.Button(label="Замерить")
+        self._speed_btn.add_css_class("pill")
+        self._speed_btn.set_valign(Gtk.Align.CENTER)
+        self._speed_btn.connect("clicked", self._on_run_speedtest_clicked)
+        speed_row.add_suffix(self._speed_btn)
+        smart_group.add(speed_row)
+
+        inner.append(smart_group)
+
         self._profile_search_entry = Gtk.SearchEntry()
         self._profile_search_entry.set_placeholder_text("Поиск серверов, стран, протоколов…")
         self._profile_search_entry.connect("search-changed", lambda _: self._profiles_listbox.invalidate_filter())

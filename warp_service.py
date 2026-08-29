@@ -101,6 +101,7 @@ def generate_warp_profile() -> Optional[Dict[str, Any]]:
         server_entry = {
             "id": f"warp_{int(datetime.datetime.now().timestamp())}",
             "name": "⚡ Личный Cloudflare WARP (Неограниченный)",
+            "ascii_name": "Cloudflare-WARP",
             "protocol": "wireguard",
             "address": host,
             "port": int(port),

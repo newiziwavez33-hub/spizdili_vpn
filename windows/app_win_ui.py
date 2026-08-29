@@ -1,5 +1,5 @@
 """
-SPIZDILI_VPN v1.2.0 — Studio-Quality Desktop Interface for Windows
+SPIZDILI_VPN v1.2.1 — Studio-Quality Desktop Interface for Windows
 Exact replica of the AetherVPN Linux design:
 - Dark glassmorphism & world-map constellation background (world-map-bg.jpg)
 - Modern 44px top header with segmented pill switcher
@@ -43,7 +43,7 @@ except ImportError:
         run_speed_test = None
 
 # Version info
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 GITHUB_REPO_URL = "https://github.com/newiziwavez33-hub/spizdili_vpn"
 
 try:
@@ -323,6 +323,7 @@ class SpizdiliVPNApp:
         self.nav_buttons: dict[str, tk.Button] = {}
         nav_defs = [
             ("connection", "⚡ Дашборд"),
+            ("speed", "🚀 Скорость & Fresh"),
             ("servers", "🌍 Серверы"),
             ("settings", "⚙️ Настройки"),
             ("logs", "📜 Журнал"),
@@ -358,7 +359,7 @@ class SpizdiliVPNApp:
         self.lbl_sidebar_status_dot = tk.Label(sidebar_bottom, text="● Отключено", font=("Segoe UI", 9, "bold"), fg="#94a3b8", bg="#1a1636")
         self.lbl_sidebar_status_dot.pack(anchor="w")
 
-        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.2.0", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
+        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.2.1", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
         lbl_sb_ver.pack(anchor="w", pady=(2, 0))
 
         # Central ViewStack Container
@@ -368,6 +369,7 @@ class SpizdiliVPNApp:
         # Pages
         self.page_frames: dict[str, tk.Frame] = {}
         self.page_frames["connection"] = self._build_connection_page()
+        self.page_frames["speed"] = self._build_speed_page()
         self.page_frames["servers"] = self._build_servers_page()
         self.page_frames["settings"] = self._build_settings_page()
         self.page_frames["logs"] = self._build_logs_page()
@@ -1076,7 +1078,7 @@ class SpizdiliVPNApp:
         btn_imp.pack(anchor="e", padx=16, pady=16)
 
     def _show_about_dialog(self) -> None:
-        """Display about modal dialog with raccoon mascot and v1.2.0."""
+        """Display about modal dialog with raccoon mascot and v1.2.1."""
         dlg = tk.Toplevel(self.root)
         dlg.title("О программе — SPIZDILI_VPN")
         dlg.geometry("420x460")

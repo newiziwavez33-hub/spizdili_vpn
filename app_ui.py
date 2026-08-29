@@ -43,7 +43,7 @@ except ImportError:
 try:
     from version import APP_VERSION
 except ImportError:
-    APP_VERSION = "1.2.0"
+    APP_VERSION = "1.2.1"
 
 __all__ = ["VPNApplication"]
 
@@ -753,7 +753,7 @@ class VPNApplication(Adw.Application):
         try:
             from version import APP_VERSION
         except Exception:
-            APP_VERSION = "1.2.0"
+            APP_VERSION = "1.2.1"
 
         about = Adw.AboutWindow(
             application_name="SPIZDILI_VPN",
@@ -788,7 +788,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.0)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.1)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -874,7 +874,7 @@ class MainWindow(Adw.ApplicationWindow):
         header_brand.append(app_title)
 
         ver_badge = Gtk.Label()
-        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.0</span>")
+        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.1</span>")
         ver_badge.add_css_class("badge-awg")
         header_brand.append(ver_badge)
         header.pack_start(header_brand)
@@ -882,7 +882,7 @@ class MainWindow(Adw.ApplicationWindow):
         # Center: Segmented Pill Switcher
         self._quick_tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
         self._quick_tab_box.add_css_class("pill-switcher")
-        tab_defs = [("connection", "Подключение"), ("profiles", "Серверы"), ("settings", "Настройки")]
+        tab_defs = [("connection", "Подключение"), ("speed", "⚡ Скорость & Fresh"), ("profiles", "Серверы"), ("settings", "Настройки")]
         self._header_tab_btns = {}
         for q_id, q_label in tab_defs:
             q_btn = Gtk.Button(label=q_label)
@@ -927,6 +927,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._nav_buttons = {}
         nav_defs = [
             ("connection", "Дашборд", "dashboard.svg"),
+            ("speed", "⚡ Скорость & Fresh", "speed.svg"),
             ("profiles", "Локации", "public.svg"),
             ("settings", "Настройки", "settings.svg"),
             ("logs", "Журнал", "terminal.svg"),
@@ -960,7 +961,7 @@ class MainWindow(Adw.ApplicationWindow):
         bot_box.set_margin_bottom(10)
         bot_box.set_margin_start(6)
         v_lbl = Gtk.Label()
-        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.0 • Protected</span>")
+        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.1 • Protected</span>")
         v_lbl.set_halign(Gtk.Align.START)
         bot_box.append(v_lbl)
         self._sidebar.append(bot_box)
@@ -981,6 +982,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Build pages
         self._build_connection_page()
+        self._build_speed_fresh_page()
         self._build_profiles_page()
         self._build_logs_page()
         self._build_settings_page()
@@ -1150,6 +1152,119 @@ class MainWindow(Adw.ApplicationWindow):
         self._stats_group.set_visible(False)
 
         overlay.add_overlay(center_content)
+
+
+    # ── Speed & Fresh Tab Page ──────────────────────────────────────────
+
+    def _build_speed_fresh_page(self) -> None:
+        page_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        scroll = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll.set_child(page_box)
+        self._stack.add_titled_with_icon(scroll, "speed", "Свежие & Скорость", "speedometer-symbolic")
+
+        clamp = Adw.Clamp(maximum_size=720, tightening_threshold=480)
+        clamp.set_hexpand(True)
+        clamp.set_vexpand(True)
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        inner.set_hexpand(True)
+        inner.set_margin_top(24)
+        inner.set_margin_bottom(24)
+        inner.set_margin_start(18)
+        inner.set_margin_end(18)
+        clamp.set_child(inner)
+        page_box.append(clamp)
+
+        # ── 1. SPEEDTEST HERO CARD ────────────────────────────────────
+        speed_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        speed_card.add_css_class("card")
+        speed_card.set_margin_bottom(8)
+
+        lbl_h = Gtk.Label()
+        lbl_h.set_markup("<span size='14000' weight='heavy' color='#ffffff'>🚀 Измеритель реальной скорости</span>")
+        lbl_h.set_halign(Gtk.Align.START)
+        speed_card.append(lbl_h)
+
+        lbl_sub = Gtk.Label()
+        lbl_sub.set_markup("<span size='10000' color='#94a3b8'>Прямой замер фактической пропускной способности туннеля через CDN Cloudflare</span>")
+        lbl_sub.set_halign(Gtk.Align.START)
+        speed_card.append(lbl_sub)
+
+        gauge_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, halign=Gtk.Align.CENTER)
+        gauge_box.set_margin_top(10)
+        gauge_box.set_margin_bottom(6)
+
+        self._speed_gauge_val = Gtk.Label()
+        self._speed_gauge_val.set_markup("<span size='44000' weight='heavy' color='#38bdf8'>0.0</span> <span size='16000' weight='bold' color='#94a3b8'>Мбит/с</span>")
+        gauge_box.append(self._speed_gauge_val)
+
+        self._speed_gauge_bar = Gtk.ProgressBar()
+        self._speed_gauge_bar.set_size_request(320, 8)
+        self._speed_gauge_bar.set_fraction(0.0)
+        gauge_box.append(self._speed_gauge_bar)
+
+        self._speed_gauge_status = Gtk.Label()
+        self._speed_gauge_status.set_markup("<span size='10000' color='#64748b'>Нажмите «Запустить тест» для измерения</span>")
+        gauge_box.append(self._speed_gauge_status)
+
+        speed_card.append(gauge_box)
+
+        self._btn_launch_speed = Gtk.Button(label="🚀 Запустить тест скорости")
+        self._btn_launch_speed.add_css_class("suggested-action")
+        self._btn_launch_speed.add_css_class("pill")
+        self._btn_launch_speed.set_size_request(240, 42)
+        self._btn_launch_speed.set_halign(Gtk.Align.CENTER)
+        self._btn_launch_speed.connect("clicked", self._on_run_speedtest_clicked)
+        speed_card.append(self._btn_launch_speed)
+
+        inner.append(speed_card)
+
+        # ── 2. FRESH SERVERS RADAR CARD ────────────────────────────────
+        fresh_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        fresh_card.add_css_class("card")
+        fresh_card.set_margin_bottom(8)
+
+        lbl_f_title = Gtk.Label()
+        lbl_f_title.set_markup("<span size='14000' weight='heavy' color='#ffffff'>📡 Радар свежих серверов [FRESH]</span>")
+        lbl_f_title.set_halign(Gtk.Align.START)
+        fresh_card.append(lbl_f_title)
+
+        lbl_f_sub = Gtk.Label()
+        lbl_f_sub.set_markup("<span size='10000' color='#94a3b8'>Поиск и добавление проверенных VLESS Reality серверов из открытых сетей с пометкой [FRESH]</span>")
+        lbl_f_sub.set_halign(Gtk.Align.START)
+        fresh_card.append(lbl_f_sub)
+
+        self._btn_fresh_scan = Gtk.Button(label="🔄 Сканировать и обновить [FRESH] сервера")
+        self._btn_fresh_scan.add_css_class("pill")
+        self._btn_fresh_scan.set_size_request(300, 40)
+        self._btn_fresh_scan.set_halign(Gtk.Align.CENTER)
+        self._btn_fresh_scan.connect("clicked", self._on_fetch_cloud_servers_clicked)
+        fresh_card.append(self._btn_fresh_scan)
+
+        inner.append(fresh_card)
+
+        # ── 3. CLOUDFLARE WARP CARD ────────────────────────────────────
+        warp_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        warp_card.add_css_class("card")
+
+        lbl_w_title = Gtk.Label()
+        lbl_w_title.set_markup("<span size='14000' weight='heavy' color='#ffffff'>🛡️ Личный Cloudflare WARP</span>")
+        lbl_w_title.set_halign(Gtk.Align.START)
+        warp_card.append(lbl_w_title)
+
+        lbl_w_sub = Gtk.Label()
+        lbl_w_sub.set_markup("<span size='10000' color='#94a3b8'>Бесплатный персональный изолированный WireGuard сервер без ограничений трафика и перегрузок</span>")
+        lbl_w_sub.set_halign(Gtk.Align.START)
+        warp_card.append(lbl_w_sub)
+
+        self._btn_warp_page_create = Gtk.Button(label="⚡ Создать личный WARP в 1 клик")
+        self._btn_warp_page_create.add_css_class("suggested-action")
+        self._btn_warp_page_create.add_css_class("pill")
+        self._btn_warp_page_create.set_size_request(280, 40)
+        self._btn_warp_page_create.set_halign(Gtk.Align.CENTER)
+        self._btn_warp_page_create.connect("clicked", self._on_create_personal_warp_clicked)
+        warp_card.append(self._btn_warp_page_create)
+
+        inner.append(warp_card)
 
 
     # ---- Profiles page ----------------------------------------------------
@@ -1628,6 +1743,10 @@ class MainWindow(Adw.ApplicationWindow):
             self._dash_speed_btn.set_label("🚀 Тест скорости")
         if mbps > 0:
             self._show_toast(f"🚀 Реальная скорость: {mbps} Мбит/с!", timeout=6)
+            if hasattr(self, "_speed_gauge_val"):
+                self._speed_gauge_val.set_markup(f"<span size='44000' weight='heavy' color='#34d399'>{mbps}</span> <span size='16000' weight='bold' color='#94a3b8'>Мбит/с</span>")
+                self._speed_gauge_bar.set_fraction(min(mbps / 100.0, 1.0))
+                self._speed_gauge_status.set_markup(f"<span size='10000' color='#34d399'>✓ Замер завершён: {mbps} Мбит/с</span>")
         else:
             self._show_toast("Не удалось замерить скорость. Проверьте активность туннеля.", timeout=5)
 

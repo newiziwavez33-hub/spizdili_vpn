@@ -262,7 +262,7 @@ def fetch_and_test_reality_servers(
                 flag = "⚡"
 
         display_name = f"{flag} Облако #{idx} | {clean_sni} ({int(s['latency'])}ms)"
-        ascii_name = f"Cloud-{idx}"
+        ascii_name = f"Fresh-{idx}"
 
         stream_settings: dict[str, Any] = {
             "network": s["network"],
@@ -364,30 +364,54 @@ def save_servers_to_system(servers: list[dict[str, Any]]) -> int:
     created_profiles = 0
 
     for s in servers:
-        conf_path = PROFILES_DIR / f"{s['ascii_name']}.conf"
-        conf_content = (
-            f"# ===================================================================\n"
-            f"# Incy Profile: {s['name']}\n"
-            f"# Protocol: VLESS\n"
-            f"# Endpoint: {s['address']}:{s['port']}\n"
-            f"# UUID: {s['uuid']}\n"
-            f"# SNI: {s['sni']}\n"
-            f"# Reality PublicKey: {s['public_key']}\n"
-            f"# ShortID: {s['short_id']}\n"
-            f"# Flow: {s['flow']}\n"
-            f"# Fingerprint: {s['fingerprint']}\n"
-            f"# URI: {s['uri']}\n"
-            f"# ===================================================================\n\n"
-            f"[Interface]\n"
-            f"PrivateKey = KJjdGNIpVYkyiZqGFyUPr0DDU5Y4znFkhd2fLlPLvlw=\n"
-            f"Address = 10.0.0.2/32\n"
-            f"DNS = 8.8.8.8, 8.8.4.4\n\n"
-            f"[Peer]\n"
-            f"PublicKey = 9QiBXCR/Iz6GRh6w9JO+oAKK0TyFcEGI9Fs9sywgqDs=\n"
-            f"Endpoint = {s['address']}:{s['port']}\n"
-            f"AllowedIPs = 0.0.0.0/0\n"
-            f"PersistentKeepalive = 25\n"
-        )
+        ascii_name = s.get("ascii_name") or s.get("id") or "Cloudflare-WARP"
+        s["ascii_name"] = ascii_name
+        conf_path = PROFILES_DIR / f"{ascii_name}.conf"
+        
+        if s.get("protocol") == "wireguard":
+            priv_k = s.get("secret_key", "")
+            pub_k = s.get("public_key", "")
+            addrs = s.get("local_address", ["172.16.0.2/32"])
+            addr_str = ", ".join(addrs) if isinstance(addrs, list) else str(addrs)
+            conf_content = (
+                f"# ===================================================================\n"
+                f"# Cloudflare WARP Profile: {s.get('name')}\n"
+                f"# Protocol: WireGuard\n"
+                f"# ===================================================================\n\n"
+                f"[Interface]\n"
+                f"PrivateKey = {priv_k}\n"
+                f"Address = {addr_str}\n"
+                f"DNS = 1.1.1.1, 1.0.0.1\n\n"
+                f"[Peer]\n"
+                f"PublicKey = {pub_k}\n"
+                f"Endpoint = {s.get('address')}:{s.get('port', 2408)}\n"
+                f"AllowedIPs = 0.0.0.0/0, ::/0\n"
+                f"PersistentKeepalive = 25\n"
+            )
+        else:
+            conf_content = (
+                f"# ===================================================================\n"
+                f"# Incy Profile: {s.get('name')}\n"
+                f"# Protocol: VLESS\n"
+                f"# Endpoint: {s.get('address')}:{s.get('port')}\n"
+                f"# UUID: {s.get('uuid', '')}\n"
+                f"# SNI: {s.get('sni', '')}\n"
+                f"# Reality PublicKey: {s.get('public_key', '')}\n"
+                f"# ShortID: {s.get('short_id', '')}\n"
+                f"# Flow: {s.get('flow', '')}\n"
+                f"# Fingerprint: {s.get('fingerprint', 'chrome')}\n"
+                f"# URI: {s.get('uri', '')}\n"
+                f"# ===================================================================\n\n"
+                f"[Interface]\n"
+                f"PrivateKey = KJjdGNIpVYkyiZqGFyUPr0DDU5Y4znFkhd2fLlPLvlw=\n"
+                f"Address = 10.0.0.2/32\n"
+                f"DNS = 8.8.8.8, 8.8.4.4\n\n"
+                f"[Peer]\n"
+                f"PublicKey = 9QiBXCR/Iz6GRh6w9JO+oAKK0TyFcEGI9Fs9sywgqDs=\n"
+                f"Endpoint = {s.get('address')}:{s.get('port')}\n"
+                f"AllowedIPs = 0.0.0.0/0\n"
+                f"PersistentKeepalive = 25\n"
+            )
         conf_path.write_text(conf_content, encoding="utf-8")
         created_profiles += 1
 

@@ -62,7 +62,8 @@ def parse_vless_uri(uri: str) -> Optional[Dict[str, Any]]:
 
         return {
             "id": f"harv_{host}_{port}",
-            "name": f"⚡ {display_name}",
+            "name": f"⚡ [FRESH] {display_name}",
+            "ascii_name": f"Fresh-{host[:8]}",
             "protocol": "vless",
             "address": host,
             "port": port,

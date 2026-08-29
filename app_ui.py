@@ -960,7 +960,7 @@ class MainWindow(Adw.ApplicationWindow):
         bot_box.set_margin_bottom(10)
         bot_box.set_margin_start(6)
         v_lbl = Gtk.Label()
-        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.0.7 • Protected</span>")
+        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.0 • Protected</span>")
         v_lbl.set_halign(Gtk.Align.START)
         bot_box.append(v_lbl)
         self._sidebar.append(bot_box)
@@ -1078,9 +1078,17 @@ class MainWindow(Adw.ApplicationWindow):
         self._selector_group.add(self._profile_dropdown_row)
         center_content.append(self._selector_group)
 
+        # Kill-Switch row (must exist for vpn connection logic)
+        self._killswitch_row = Adw.SwitchRow(
+            title="Kill-Switch",
+            subtitle="Блокировать трафик при обрыве VPN",
+        )
+        self._killswitch_row.connect("notify::active", self._on_killswitch_toggled)
+        self._selector_group.add(self._killswitch_row)
+
         # Quick Action Buttons on Main Dashboard
         quick_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, halign=Gtk.Align.CENTER)
-        quick_actions_box.set_margin_top(6)
+        quick_actions_box.set_margin_top(8)
 
         self._dash_warp_btn = Gtk.Button(label="🛡️ Личный WARP")
         self._dash_warp_btn.add_css_class("suggested-action")
@@ -1102,14 +1110,6 @@ class MainWindow(Adw.ApplicationWindow):
         quick_actions_box.append(self._dash_speed_btn)
 
         center_content.append(quick_actions_box)
-
-        # Kill-Switch row (must exist for vpn connection logic)
-        self._killswitch_row = Adw.SwitchRow(
-            title="Kill-Switch",
-            subtitle="Блокировать трафик при обрыве VPN",
-        )
-        self._killswitch_row.connect("notify::active", self._on_killswitch_toggled)
-        self._selector_group.add(self._killswitch_row)
 
         # Bottom Footer Diagnostics Card
         self._footer_dock = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24, halign=Gtk.Align.CENTER)
@@ -1560,6 +1560,76 @@ class MainWindow(Adw.ApplicationWindow):
         inner.append(upd_group)
 
     # ── Open Reality Community Feed Fetcher ──────────────────────────────
+
+    # ── Cloudflare WARP & Speedtest Handlers ──────────────────────────────
+
+    def _on_create_personal_warp_clicked(self, _btn=None) -> None:
+        self._show_toast("Генерация бесплатного личного аккаунта Cloudflare WARP...", timeout=6)
+        if hasattr(self, "_btn_warp_create"):
+            self._btn_warp_create.set_sensitive(False)
+            self._btn_warp_create.set_label("Создание...")
+        if hasattr(self, "_dash_warp_btn"):
+            self._dash_warp_btn.set_sensitive(False)
+            self._dash_warp_btn.set_label("Создание...")
+
+        def _task():
+            try:
+                import warp_service
+                warp_srv = warp_service.generate_warp_profile()
+                if warp_srv:
+                    import reality_fetcher
+                    reality_fetcher.save_servers_to_system([warp_srv])
+                    GLib.idle_add(self._on_warp_created_done, True, "✓ Личный сервер Cloudflare WARP успешно создан и сохранён!")
+                else:
+                    GLib.idle_add(self._on_warp_created_done, False, "Не удалось связаться с Cloudflare API")
+            except Exception as exc:
+                GLib.idle_add(self._on_warp_created_done, False, str(exc))
+
+        import threading as _th
+        _th.Thread(target=_task, daemon=True).start()
+
+    def _on_warp_created_done(self, success: bool, msg: str) -> None:
+        if hasattr(self, "_btn_warp_create"):
+            self._btn_warp_create.set_sensitive(True)
+            self._btn_warp_create.set_label("Создать")
+        if hasattr(self, "_dash_warp_btn"):
+            self._dash_warp_btn.set_sensitive(True)
+            self._dash_warp_btn.set_label("🛡️ Личный WARP")
+        if success:
+            self._refresh_profiles()
+        self._show_toast(msg, timeout=5)
+
+    def _on_run_speedtest_clicked(self, _btn=None) -> None:
+        self._show_toast("Замер скорости загрузки через туннель...", timeout=6)
+        if hasattr(self, "_speed_btn"):
+            self._speed_btn.set_sensitive(False)
+            self._speed_btn.set_label("Тест...")
+        if hasattr(self, "_dash_speed_btn"):
+            self._dash_speed_btn.set_sensitive(False)
+            self._dash_speed_btn.set_label("Тест...")
+
+        def _task():
+            try:
+                import speedtest_service
+                mbps = speedtest_service.run_speed_test()
+                GLib.idle_add(self._on_speedtest_done, mbps)
+            except Exception as exc:
+                GLib.idle_add(self._on_speedtest_done, 0.0)
+
+        import threading as _th
+        _th.Thread(target=_task, daemon=True).start()
+
+    def _on_speedtest_done(self, mbps: float) -> None:
+        if hasattr(self, "_speed_btn"):
+            self._speed_btn.set_sensitive(True)
+            self._speed_btn.set_label("Замерить")
+        if hasattr(self, "_dash_speed_btn"):
+            self._dash_speed_btn.set_sensitive(True)
+            self._dash_speed_btn.set_label("🚀 Тест скорости")
+        if mbps > 0:
+            self._show_toast(f"🚀 Реальная скорость: {mbps} Мбит/с!", timeout=6)
+        else:
+            self._show_toast("Не удалось замерить скорость. Проверьте активность туннеля.", timeout=5)
 
     def _on_fetch_cloud_servers_clicked(self, _btn=None) -> None:
         self._show_toast("Поиск и замер задержки открытых серверов Reality…", timeout=5)

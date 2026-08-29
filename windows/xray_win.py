@@ -1,13 +1,14 @@
 """
 Windows Xray VLESS Reality Engine Controller
 Supports: Windows 7, Windows 8, Windows 10, Windows 11
-Handles embedded xray.exe lifecycle, config generation, and traffic stats.
+Handles embedded xray.exe lifecycle, dynamic port allocation, and config generation.
 """
 
 import sys
 import os
 import json
 import time
+import socket
 import subprocess
 import logging
 from pathlib import Path
@@ -15,8 +16,17 @@ from typing import Optional, Any
 
 logger = logging.getLogger("xray_win")
 
-HTTP_PORT = 20809
-SOCKS_PORT = 20808
+
+def find_free_port(preferred: int) -> int:
+    """Find the next available TCP port on 127.0.0.1."""
+    for port in range(preferred, preferred + 100):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    return preferred
 
 
 class WindowsXrayManager:
@@ -36,6 +46,8 @@ class WindowsXrayManager:
         self._active_profile: Optional[str] = None
         self._start_time: Optional[float] = None
         self._active_server: Optional[dict[str, Any]] = None
+        self.current_http_port: int = 20809
+        self.current_socks_port: int = 20808
 
     def find_xray_binary(self) -> Optional[Path]:
         """Locate bundled or system xray.exe."""
@@ -44,7 +56,7 @@ class WindowsXrayManager:
             self.base_dir / "xray.exe",
             Path(sys.executable).parent / "xray.exe",
             Path(sys.executable).parent / "bin" / "xray.exe",
-            Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "Xray" / "xray.exe",
+            Path(os.environ.get("ProgramFiles", "C:\Program Files")) / "Xray" / "xray.exe",
         ]
         for c in candidates:
             if c.is_file():
@@ -52,7 +64,7 @@ class WindowsXrayManager:
         return None
 
     def generate_config(self, server: dict[str, Any]) -> dict[str, Any]:
-        """Generate high-stability Xray config for Windows with AI IDE streaming optimizations."""
+        """Generate high-stability Xray config for Windows with dynamic ports."""
         full_json = server.get("full_config_json")
         cfg = {}
         if full_json:
@@ -62,7 +74,6 @@ class WindowsXrayManager:
                 pass
 
         if not cfg:
-            # Fallback direct VLESS template
             cfg = {
                 "log": {"loglevel": "warning"},
                 "outbounds": [{
@@ -86,17 +97,20 @@ class WindowsXrayManager:
                             "serverName": server.get("sni", "storage.yandex.net"),
                             "publicKey": server.get("public_key", ""),
                             "shortId": server.get("short_id", ""),
-                            "fingerprint": server.get("fingerprint", "firefox")
+                            "fingerprint": server.get("fingerprint", "chrome")
                         }
                     }
                 }, {"protocol": "freedom", "tag": "direct"}, {"protocol": "blackhole", "tag": "block"}]
             }
 
-        # Windows local Inbounds
+        # Allocate guaranteed free ports
+        self.current_socks_port = find_free_port(20810)
+        self.current_http_port = find_free_port(self.current_socks_port + 1)
+
         cfg["inbounds"] = [
             {
                 "tag": "socks",
-                "port": SOCKS_PORT,
+                "port": self.current_socks_port,
                 "listen": "127.0.0.1",
                 "protocol": "socks",
                 "settings": {"udp": True},
@@ -104,14 +118,14 @@ class WindowsXrayManager:
             },
             {
                 "tag": "http",
-                "port": HTTP_PORT,
+                "port": self.current_http_port,
                 "listen": "127.0.0.1",
                 "protocol": "http",
                 "sniffing": {"enabled": True, "destOverride": ["http", "tls"]}
             }
         ]
 
-        # AI IDE streaming policy (Google Antigravity, OpenAI, Claude, OpenCode)
+        # Policy
         cfg["policy"] = {
             "levels": {
                 "0": {
@@ -123,42 +137,8 @@ class WindowsXrayManager:
                     "statsUserDownlink": True,
                     "bufferSize": 65536
                 }
-            },
-            "system": {
-                "statsOutboundUplink": True,
-                "statsOutboundDownlink": True
             }
         }
-
-        # Prioritized DNS for AI endpoints
-        cfg["dns"] = {
-            "servers": [
-                {
-                    "address": "https://1.1.1.1/dns-query",
-                    "domains": [
-                        "domain:openai.com", "domain:chatgpt.com", "domain:oaistatic.com", "domain:oaiusercontent.com",
-                        "domain:anthropic.com", "domain:claude.ai",
-                        "domain:googleapis.com", "domain:google.com", "domain:gstatic.com", "domain:googlevideo.com",
-                        "domain:github.com", "domain:githubusercontent.com",
-                        "domain:opencode.ai", "domain:huggingface.co", "domain:openrouter.ai"
-                    ]
-                },
-                "https://8.8.8.8/dns-query",
-                "8.8.8.8",
-                "1.1.1.1"
-            ],
-            "queryStrategy": "UseIPv4"
-        }
-
-        # Enable TCP keep-alive on outbounds
-        for ob in cfg.get("outbounds", []):
-            if ob.get("tag") == "proxy" or ob.get("protocol") in ("vless", "vmess", "shadowsocks", "trojan"):
-                stream = ob.setdefault("streamSettings", {})
-                sockopt = stream.setdefault("sockopt", {})
-                sockopt["tcpKeepAliveInterval"] = 15
-                sockopt["tcpKeepAliveIdle"] = 30
-                sockopt["tcpUserTimeout"] = 30000
-                sockopt["tcpNoDelay"] = True
 
         return cfg
 
@@ -168,7 +148,7 @@ class WindowsXrayManager:
 
         xray_bin = self.find_xray_binary()
         if not xray_bin:
-            return False, "xray.exe binary not found. Please ensure it is present in the application folder."
+            return False, "xray.exe binary not found in application directory."
 
         cfg = self.generate_config(server)
         try:
@@ -180,22 +160,34 @@ class WindowsXrayManager:
         if sys.platform == "win32":
             creation_flags = 0x08000000  # CREATE_NO_WINDOW
 
+        # Set cwd to bin directory so geoip.dat / geosite.dat are loaded
+        work_dir = xray_bin.parent
+
         try:
             self._proc = subprocess.Popen(
                 [str(xray_bin), "run", "-c", str(self.config_path)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                cwd=str(work_dir),
                 creationflags=creation_flags
             )
             self._active_profile = server.get("name", "Unknown Server")
             self._active_server = server
             self._start_time = time.time()
-            time.sleep(0.5)
+            time.sleep(0.7)
 
             if self._proc.poll() is not None:
-                return False, "xray.exe exited immediately on launch."
+                err_out = ""
+                try:
+                    _, err = self._proc.communicate(timeout=1)
+                    err_out = err.strip()
+                except Exception:
+                    pass
+                return False, f"xray.exe stopped: {err_out or 'check config'}"
 
-            logger.info("Xray engine started successfully on Windows (PID %d)", self._proc.pid)
+            logger.info("Xray engine started successfully on Windows (PID %d, HTTP %d, SOCKS %d)",
+                        self._proc.pid, self.current_http_port, self.current_socks_port)
             return True, "Connected"
         except Exception as exc:
             return False, f"Failed to start xray.exe: {exc}"
@@ -214,7 +206,11 @@ class WindowsXrayManager:
             self._proc = None
 
         if sys.platform == "win32":
-            subprocess.run(["taskkill", "/F", "/IM", "xray.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            try:
+                subprocess.run(["taskkill", "/F", "/IM", "xray.exe"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            except Exception:
+                pass
 
         self._active_profile = None
         self._active_server = None

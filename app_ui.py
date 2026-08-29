@@ -43,7 +43,7 @@ except ImportError:
 try:
     from version import APP_VERSION
 except ImportError:
-    APP_VERSION = "1.0.7"
+    APP_VERSION = "1.0.8"
 
 __all__ = ["VPNApplication"]
 
@@ -753,7 +753,7 @@ class VPNApplication(Adw.Application):
         try:
             from version import APP_VERSION
         except Exception:
-            APP_VERSION = "1.0.7"
+            APP_VERSION = "1.0.8"
 
         about = Adw.AboutWindow(
             application_name="SPIZDILI_VPN",
@@ -788,7 +788,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.7)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.0.8)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -874,7 +874,7 @@ class MainWindow(Adw.ApplicationWindow):
         header_brand.append(app_title)
 
         ver_badge = Gtk.Label()
-        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.0.7</span>")
+        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.0.8</span>")
         ver_badge.add_css_class("badge-awg")
         header_brand.append(ver_badge)
         header.pack_start(header_brand)

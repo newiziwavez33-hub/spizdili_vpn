@@ -996,9 +996,14 @@ class MainWindow(Adw.ApplicationWindow):
         GLib.timeout_add_seconds(5, lambda: self._schedule_auto_update_check() or False)
 
     def _on_turn_on_clicked(self, btn: Gtk.Button) -> None:
-        logger.info("TURN ON button clicked (connected=%s)", self._connected)
-        if self._connected:
-            self._on_disconnect_clicked(btn)
+        logger.info("TURN ON button clicked (connected=%s, connecting=%s)", self._connected, getattr(self, "_connecting", False))
+        if getattr(self, "_connecting", False):
+            self._show_toast("Пожалуйста, подождите завершения операции…")
+            return
+
+        is_active = self._connected or getattr(self.vpn, "_connected", False) or self.vpn.xray_manager.is_connected()
+        if is_active:
+            self._do_disconnect()
         else:
             self._on_connect_clicked(btn)
 
@@ -2787,15 +2792,29 @@ class MainWindow(Adw.ApplicationWindow):
 
     # ---- Connection actions -----------------------------------------------
 
-    def _on_connect_clicked(self, button: Gtk.Button) -> None:
-        selected = self._profile_dropdown_row.get_selected()
-        if (selected == Gtk.INVALID_LIST_POSITION or not self._profile_names) and hasattr(self, "_profile_names") and self._profile_names:
-            selected = 0
-            self._profile_dropdown_row.set_selected(0)
-        if selected == Gtk.INVALID_LIST_POSITION or not getattr(self, "_profile_names", None):
-            self._show_toast("Профиль не выбран")
+    def _on_connect_clicked(self, button: Gtk.Button = None) -> None:
+        profile_name = None
+        if hasattr(self, "_profile_names") and self._profile_names:
+            selected = self._profile_dropdown_row.get_selected() if hasattr(self, "_profile_dropdown_row") else 0
+            if 0 <= selected < len(self._profile_names):
+                profile_name = self._profile_names[selected]
+            else:
+                profile_name = self._profile_names[0]
+                if hasattr(self, "_profile_dropdown_row"):
+                    self._profile_dropdown_row.set_selected(0)
+        elif hasattr(self, "cfg"):
+            last = self.cfg.get_last_connected()
+            if last:
+                profile_name = last
+            else:
+                profs = self.cfg.list_profiles()
+                if profs:
+                    profile_name = profs[0].name
+
+        if not profile_name:
+            self._show_toast("⚠️ Сервер не выбран. Нажмите «Свежие сервера» или создайте Cloudflare.")
             return
-        profile_name = self._profile_names[selected]
+
         self._do_connect(profile_name)
 
     def _on_disconnect_clicked(self, button: Gtk.Button) -> None:
@@ -2905,14 +2924,32 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _set_connecting_state(self, connecting: bool) -> None:
         self._connecting = connecting
-        self._connect_btn.set_sensitive(not connecting)
-        self._disconnect_btn.set_sensitive(not connecting)
-        self._spinner.set_visible(connecting)
-        if connecting:
-            self._spinner.start()
-            self._status_label.set_text("Подключение…")
-        else:
-            self._spinner.stop()
+        if hasattr(self, "_turn_on_btn"):
+            if connecting:
+                self._turn_on_btn.remove_css_class("connected")
+                self._turn_on_btn.add_css_class("connecting")
+                self._turn_on_lbl.set_text("CONNECTING...")
+            else:
+                self._turn_on_btn.remove_css_class("connecting")
+                if self._connected:
+                    self._turn_on_btn.add_css_class("connected")
+                    self._turn_on_lbl.set_text("TURN OFF")
+                else:
+                    self._turn_on_lbl.set_text("TURN ON")
+        if hasattr(self, "_status_label"):
+            if connecting:
+                self._status_label.set_markup("<span size='20000' weight='heavy' color='#facc15'>Connecting…</span>")
+                self._status_subtitle.set_markup("<span size='11500' color='#94a3b8'>Establishing encrypted tunnel…</span>")
+        if hasattr(self, "_connect_btn"):
+            self._connect_btn.set_sensitive(not connecting)
+        if hasattr(self, "_disconnect_btn"):
+            self._disconnect_btn.set_sensitive(not connecting)
+        if hasattr(self, "_spinner"):
+            self._spinner.set_visible(connecting)
+            if connecting:
+                self._spinner.start()
+            else:
+                self._spinner.stop()
 
     def _update_connection_ui(self) -> None:
         """Update all UI elements to reflect current connection state with glowing circular button."""

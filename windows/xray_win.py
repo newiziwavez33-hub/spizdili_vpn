@@ -74,34 +74,57 @@ class WindowsXrayManager:
                 pass
 
         if not cfg:
-            cfg = {
-                "log": {"loglevel": "warning"},
-                "outbounds": [{
-                    "protocol": "vless",
-                    "tag": "proxy",
-                    "settings": {
-                        "vnext": [{
-                            "address": server.get("address", ""),
-                            "port": server.get("port", 443),
-                            "users": [{
-                                "id": server.get("uuid", ""),
-                                "encryption": "none",
-                                "flow": server.get("flow", "xtls-rprx-vision")
+            proto = server.get("protocol", "vless").lower()
+            if proto == "wireguard":
+                local_addrs = server.get("local_address", ["172.16.0.2/32"])
+                if isinstance(local_addrs, str):
+                    local_addrs = [local_addrs]
+                local_addrs = [a if "/" in a else f"{a}/32" for a in local_addrs]
+                cfg = {
+                    "log": {"loglevel": "warning"},
+                    "outbounds": [{
+                        "protocol": "wireguard",
+                        "tag": "proxy",
+                        "settings": {
+                            "secretKey": server.get("secret_key", ""),
+                            "address": local_addrs,
+                            "peers": [{
+                                "publicKey": server.get("public_key", ""),
+                                "endpoint": f"{server.get('address', '162.159.193.1')}:{server.get('port', 2408)}",
+                                "keepAlive": 25
                             }]
-                        }]
-                    },
-                    "streamSettings": {
-                        "network": "tcp",
-                        "security": "reality",
-                        "realitySettings": {
-                            "serverName": server.get("sni", "storage.yandex.net"),
-                            "publicKey": server.get("public_key", ""),
-                            "shortId": server.get("short_id", ""),
-                            "fingerprint": server.get("fingerprint", "chrome")
                         }
-                    }
-                }, {"protocol": "freedom", "tag": "direct"}, {"protocol": "blackhole", "tag": "block"}]
-            }
+                    }, {"protocol": "freedom", "tag": "direct"}]
+                }
+            else:
+                cfg = {
+                    "log": {"loglevel": "warning"},
+                    "outbounds": [{
+                        "protocol": "vless",
+                        "tag": "proxy",
+                        "settings": {
+                            "vnext": [{
+                                "address": server.get("address", ""),
+                                "port": server.get("port", 443),
+                                "users": [{
+                                    "id": server.get("uuid", ""),
+                                    "encryption": "none",
+                                    "flow": server.get("flow", "xtls-rprx-vision")
+                                }]
+                            }]
+                        },
+                        "streamSettings": {
+                            "network": server.get("network", "tcp"),
+                            "security": server.get("security", "reality"),
+                            "realitySettings": {
+                                "serverName": server.get("sni", "storage.yandex.net"),
+                                "publicKey": server.get("public_key", ""),
+                                "shortId": server.get("short_id", ""),
+                                "fingerprint": server.get("fingerprint", "chrome")
+                            }
+                        }
+                    }, {"protocol": "freedom", "tag": "direct"}, {"protocol": "blackhole", "tag": "block"}]
+                }
 
         # Allocate guaranteed free ports
         self.current_socks_port = find_free_port(20810)

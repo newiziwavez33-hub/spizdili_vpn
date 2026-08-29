@@ -162,13 +162,99 @@ class XrayManager:
             return False, f"Server parameters for '{profile_name}' not found"
 
         full_json_str = s_data.get("full_config_json")
-        if not full_json_str:
-            return False, f"Missing Xray configuration JSON for '{profile_name}'"
+        cfg = None
+        if full_json_str:
+            try:
+                cfg = json.loads(full_json_str)
+            except Exception as exc:
+                logger.warning("Invalid full_config_json, rebuilding dynamically: %s", exc)
 
-        try:
-            cfg = json.loads(full_json_str)
-        except Exception as exc:
-            return False, f"Invalid Xray JSON for '{profile_name}': {exc}"
+        if not cfg:
+            proto = s_data.get("protocol", "vless").lower()
+            if proto == "wireguard":
+                # Pure user-space WireGuard in Xray Core (No root or /etc/wireguard required)
+                secret_key = s_data.get("secret_key", "")
+                public_key = s_data.get("public_key", "")
+                addr = s_data.get("address", "162.159.193.1")
+                port = int(s_data.get("port", 2408))
+                local_addrs = s_data.get("local_address", ["172.16.0.2/32"])
+                if isinstance(local_addrs, str):
+                    local_addrs = [local_addrs]
+                local_addrs = [a if "/" in a else f"{a}/32" for a in local_addrs]
+
+                cfg = {
+                    "log": {"loglevel": "warning"},
+                    "outbounds": [
+                        {
+                            "tag": "proxy",
+                            "protocol": "wireguard",
+                            "settings": {
+                                "secretKey": secret_key,
+                                "address": local_addrs,
+                                "peers": [
+                                    {
+                                        "publicKey": public_key,
+                                        "endpoint": f"{addr}:{port}",
+                                        "keepAlive": 25
+                                    }
+                                ]
+                            }
+                        },
+                        {"tag": "direct", "protocol": "freedom"}
+                    ]
+                }
+            else:
+                # VLESS Reality or WebSocket CDN
+                sec = s_data.get("security", "reality")
+                net = s_data.get("network", "tcp")
+                stream_settings = {
+                    "network": net,
+                    "security": sec,
+                }
+                if sec == "reality":
+                    stream_settings["realitySettings"] = {
+                        "serverName": s_data.get("sni", s_data.get("address", "")),
+                        "publicKey": s_data.get("public_key") or s_data.get("pbk", ""),
+                        "shortId": s_data.get("short_id") or s_data.get("sid", ""),
+                        "fingerprint": s_data.get("fingerprint", "chrome")
+                    }
+                elif sec == "tls":
+                    stream_settings["tlsSettings"] = {
+                        "serverName": s_data.get("sni", s_data.get("address", "")),
+                        "allowInsecure": False
+                    }
+                if net == "ws":
+                    stream_settings["wsSettings"] = {
+                        "path": s_data.get("ws_path", "/"),
+                        "headers": {"Host": s_data.get("ws_host", s_data.get("sni", ""))}
+                    }
+
+                cfg = {
+                    "log": {"loglevel": "warning"},
+                    "outbounds": [
+                        {
+                            "tag": "proxy",
+                            "protocol": "vless",
+                            "settings": {
+                                "vnext": [
+                                    {
+                                        "address": s_data.get("address", ""),
+                                        "port": int(s_data.get("port", 443)),
+                                        "users": [
+                                            {
+                                                "id": s_data.get("uuid", ""),
+                                                "encryption": "none",
+                                                "flow": s_data.get("flow", "xtls-rprx-vision")
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            "streamSettings": stream_settings
+                        },
+                        {"tag": "direct", "protocol": "freedom"}
+                    ]
+                }
 
         # Configure inbounds: Kernel-level TUN interface (for ALL apps/system traffic) + SOCKS + HTTP
         inbounds = [

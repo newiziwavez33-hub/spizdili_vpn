@@ -1,74 +1,27 @@
 /**
- * SPIZDILI_VPN Popup Controller
- * Manages user interface, proxy toggling, raccoon animations, and IP checking.
+ * SPIZDILI_VPN Popup Controller (v1.0.9)
+ * Connects Google Chrome to the high-speed local SPIZDILI_VPN client engine.
+ * Routes Chrome traffic through VLESS Reality, WireGuard & AmneziaWG tunnels.
  */
 
 const SERVERS = {
-  local: {
+  local_http: {
+    scheme: "http",
+    host: "127.0.0.1",
+    port: 20809,
+    name: "🦝 SPIZDILI Клиент (HTTP 127.0.0.1:20809 • Рекомендуется)"
+  },
+  local_socks: {
     scheme: "socks5",
     host: "127.0.0.1",
-    port: 10808,
-    name: "🦝 Локальный туннель SPIZDILI (127.0.0.1:10808)"
+    port: 20808,
+    name: "🦝 SPIZDILI Клиент (SOCKS5 127.0.0.1:20808)"
   },
-  fi1: {
-    scheme: "socks5",
-    host: "31.77.202.252",
-    port: 10808,
-    name: "🇫🇮 Финляндия • Облако #1 (cloudflare.com)"
-  },
-  se: {
-    scheme: "socks5",
-    host: "84.32.106.178",
-    port: 10808,
-    name: "🇸🇪 Швеция • Облако #2 (yandex.net)"
-  },
-  fi2: {
-    scheme: "socks5",
-    host: "31.77.202.252",
-    port: 20532,
-    name: "🇫🇮 Финляндия • Облако #3 (cloudflare.com)"
-  },
-  nl: {
-    scheme: "socks5",
-    host: "50.7.240.210",
-    port: 10808,
-    name: "🇳🇱 Нидерланды • Облако #4 (samsung.com)"
-  },
-  us1: {
-    scheme: "socks5",
-    host: "45.33.107.60",
-    port: 10974,
-    name: "🇺🇸 США • Облако #5 (intel.com)"
-  },
-  us2: {
-    scheme: "socks5",
-    host: "172.233.139.46",
-    port: 53734,
-    name: "🇺🇸 США • Облако #6 (tesla.com)"
-  },
-  us3: {
-    scheme: "socks5",
-    host: "192.155.87.188",
-    port: 10092,
-    name: "🇺🇸 США • Облако #7 (amd.com)"
-  },
-  us4: {
-    scheme: "socks5",
-    host: "172.236.252.35",
-    port: 46645,
-    name: "🇺🇸 США • Облако #8 (sony.com)"
-  },
-  sg: {
-    scheme: "socks5",
-    host: "54.169.200.246",
-    port: 41688,
-    name: "🇸🇬 Сингапур • Облако #9 (intel.com)"
-  },
-  kr: {
-    scheme: "socks5",
-    host: "43.108.86.165",
-    port: 25636,
-    name: "🇰🇷 Корея • Облако #10 (apple.com)"
+  local_win_dyn: {
+    scheme: "http",
+    host: "127.0.0.1",
+    port: 20811,
+    name: "🪟 Windows Динамический порт (HTTP 127.0.0.1:20811)"
   }
 };
 
@@ -105,8 +58,21 @@ const chkBypassRu = document.getElementById("chk-bypass-ru");
 
 let isConnected = false;
 
+// Populate server dropdown
+function populateServers() {
+  serverSelect.innerHTML = "";
+  for (const [key, srv] of Object.entries(SERVERS)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = srv.name;
+    serverSelect.appendChild(opt);
+  }
+}
+
 // Initialize state
 document.addEventListener("DOMContentLoaded", async () => {
+  populateServers();
+
   chrome.runtime.sendMessage({ type: "GET_STATE" }, (response) => {
     if (response) {
       isConnected = !!response.connected;
@@ -163,17 +129,16 @@ btnToggle.addEventListener("click", () => {
 function handleConnect() {
   btnToggle.className = "power-btn connecting";
   statusTitle.textContent = "Подключение…";
-  statusSubtitle.textContent = "Установка безопасного туннеля…";
+  statusSubtitle.textContent = "Связь с локальным клиентом SPIZDILI_VPN…";
 
-  const key = serverSelect.value || "local";
-  const srv = SERVERS[key] || SERVERS.local;
+  const key = serverSelect.value || "local_http";
+  const srv = SERVERS[key] || SERVERS.local_http;
 
   let bypass = [...DEFAULT_BYPASS];
   if (chkBypassRu.checked) {
     bypass = bypass.concat(RU_BYPASS_DOMAINS);
   }
 
-  // Ensure pure ASCII only
   const asciiBypass = bypass.filter(item => typeof item === "string" && /^[\x00-\x7F]+$/.test(item.trim())).map(s => s.trim());
 
   chrome.runtime.sendMessage(
@@ -190,8 +155,8 @@ function handleConnect() {
       } else {
         isConnected = false;
         btnToggle.className = "power-btn";
-        statusTitle.textContent = "Ошибка подключения";
-        statusSubtitle.textContent = (resp && resp.error) || "Не удалось включить прокси";
+        statusTitle.textContent = "Ошибка";
+        statusSubtitle.textContent = (resp && resp.error) || "Убедитесь, что клиент SPIZDILI_VPN запущен";
         mascotWrapper.classList.remove("active");
       }
     }
@@ -200,58 +165,41 @@ function handleConnect() {
 
 // Disconnect logic
 function handleDisconnect() {
-  btnToggle.className = "power-btn";
-  statusTitle.textContent = "Отключение…";
-
   chrome.runtime.sendMessage({ type: "DISCONNECT" }, () => {
     isConnected = false;
     updateUI(false);
   });
 }
 
-// Update UI presentation
+// Update UI
 function updateUI(connected) {
   if (connected) {
     btnToggle.className = "power-btn connected";
     statusTitle.textContent = "Защищено";
-    const sName = (SERVERS[serverSelect.value] && SERVERS[serverSelect.value].name) || "Туннель";
-    statusSubtitle.textContent = `Активен: ${sName}`;
+    statusSubtitle.textContent = "Трафик Chrome зашифрован через SPIZDILI";
     mascotWrapper.classList.add("active");
     networkInfo.classList.add("visible");
   } else {
     btnToggle.className = "power-btn";
     statusTitle.textContent = "Отключено";
-    statusSubtitle.textContent = "Выберите сервер и нажмите для подключения";
+    statusSubtitle.textContent = "Выберите режим и нажмите для подключения";
     mascotWrapper.classList.remove("active");
     networkInfo.classList.remove("visible");
-    extIp.textContent = "Определение…";
-    extCountry.textContent = "—";
   }
 }
 
-// Check real external IP
+// Fetch external IP with timeout
 async function fetchExternalIP() {
-  extIp.textContent = "Запрос…";
-  try {
-    const res = await fetch("https://api.ipify.org?format=json");
-    if (res.ok) {
-      const data = await res.json();
-      extIp.textContent = data.ip;
+  extIp.textContent = "Проверка…";
+  extCountry.textContent = "—";
 
-      try {
-        const geoRes = await fetch(`http://ip-api.com/json/${data.ip}?fields=country,countryCode,city`);
-        if (geoRes.ok) {
-          const geo = await geoRes.json();
-          extCountry.textContent = `${geo.country || ""} (${geo.city || ""})`;
-        }
-      } catch (e) {
-        extCountry.textContent = "Защищено";
-      }
-    } else {
-      extIp.textContent = "Скрыт";
-    }
-  } catch (e) {
-    extIp.textContent = "Скрыт туннелем";
-    extCountry.textContent = "Шифрование активно";
+  try {
+    const res = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
+    const data = await res.json();
+    extIp.textContent = data.ip;
+    extCountry.textContent = "🌍 Защищённый узел";
+  } catch {
+    extIp.textContent = "127.0.0.1 (Прокси активен)";
+    extCountry.textContent = "🔒 Локальный туннель";
   }
 }

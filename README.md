@@ -2,7 +2,7 @@
   <img src="icons/spizdili-logo.png" width="220" alt="SPIZDILI_VPN Logo" />
 </p>
 
-<h1 align="center">🦝 SPIZDILI_VPN (v1.0.8)</h1>
+<h1 align="center">🦝 SPIZDILI_VPN (v1.0.9)</h1>
 
 <p align="center">
   <b>Современный, автономный и быстрый VPN-клиент для Windows 7/8/10/11 и Linux</b><br>
@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-7%20%7C%208%20%7C%2010%20%7C%2011-0078D6?style=flat-square&logo=windows" alt="Windows" />
   <img src="https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Debian%20%7C%20Arch%20%7C%20Fedora-E95420?style=flat-square&logo=ubuntu" alt="Linux" />
-  <img src="https://img.shields.io/badge/Version-v1.0.8-blue?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-v1.0.9-blue?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/Servers-51%20Nodes-success?style=flat-square" alt="Servers" />
   <img src="https://img.shields.io/badge/Protocols-VLESS%20Reality%20%7C%20WireGuard%20%7C%20AWG-purple?style=flat-square" alt="Protocols" />
   <img src="https://img.shields.io/badge/AI%20Optimized-Antigravity%20%7C%20Gemini%20%7C%20Claude%20%7C%20ChatGPT-brightgreen?style=flat-square" alt="AI Optimized" />
@@ -26,7 +26,7 @@
 Версия для Windows собрана в виде **автономного `.exe` файла**, работающего «из коробки» на любой версии Windows (7 SP1, 8.1, 10, 11):
 
 1. Перейдите во вкладку **[Releases](https://github.com/newiziwavez33-hub/spizdili_vpn/releases/latest)**.
-2. Скачайте **`SPIZDILI_VPN.exe`** (или `SPIZDILI_VPN_v1.0.8_Windows_x64.zip`).
+2. Скачайте **`SPIZDILI_VPN.exe`** (или `SPIZDILI_VPN_v1.0.9_Windows_x64.zip`).
 3. Запустите `SPIZDILI_VPN.exe` — приложение готово к работе сразу со всеми 51 серверами, автоподключением к самому быстрому Облаку и AI-оптимизацией!
 
 ---
@@ -34,9 +34,9 @@
 ## 🐧 Установка на Linux (Ubuntu / Debian / Astra / Mint / Fedora / Arch)
 
 ### Способ 1: Установка готового DEB пакета (Рекомендуется)
-Скачайте **`spizdili-vpn_1.0.8_amd64.deb`** из [последнего релиза](https://github.com/newiziwavez33-hub/spizdili_vpn/releases/latest) и установите:
+Скачайте **`spizdili-vpn_1.0.9_amd64.deb`** из [последнего релиза](https://github.com/newiziwavez33-hub/spizdili_vpn/releases/latest) и установите:
 ```bash
-sudo dpkg -i spizdili-vpn_1.0.8_amd64.deb
+sudo dpkg -i spizdili-vpn_1.0.9_amd64.deb
 ```
 
 ### Способ 2: Установка из исходного кода
@@ -135,11 +135,11 @@ sudo ./install.sh
 
 ### Сборка `.deb` пакета для Linux:
 ```bash
-dpkg-deb --root-owner-group -b package_dir spizdili-vpn_1.0.8_amd64.deb
+dpkg-deb --root-owner-group -b package_dir spizdili-vpn_1.0.9_amd64.deb
 ```
 
 ### Сборка standalone `.exe` для Windows (PyInstaller):
 ```bash
 python windows/build_exe.py
-# Создает dist/SPIZDILI_VPN.exe и dist/SPIZDILI_VPN_v1.0.8_Windows_x64.zip
+# Создает dist/SPIZDILI_VPN.exe и dist/SPIZDILI_VPN_v1.0.9_Windows_x64.zip
 ```

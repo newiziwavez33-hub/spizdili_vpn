@@ -1560,6 +1560,98 @@ class MainWindow(Adw.ApplicationWindow):
         import threading as _th
         _th.Thread(target=_check, daemon=True).start()
 
+    def _populate_clean_release_notes(self, buf, raw_notes: str) -> None:
+        """Parses markdown and cleans HTML/shields into beautiful, adaptive, rich text."""
+        import gi
+        from gi.repository import Pango
+        import re
+
+        tag_table = buf.get_tag_table()
+        if not tag_table.lookup("h1"):
+            buf.create_tag("h1", weight=Pango.Weight.BOLD, scale=1.22, foreground="#a5b4fc", pixels_above_lines=12, pixels_below_lines=6)
+            buf.create_tag("h2", weight=Pango.Weight.BOLD, scale=1.12, foreground="#38bdf8", pixels_above_lines=10, pixels_below_lines=4)
+            buf.create_tag("h3", weight=Pango.Weight.BOLD, scale=1.04, foreground="#c084fc", pixels_above_lines=8, pixels_below_lines=3)
+            buf.create_tag("bold", weight=Pango.Weight.BOLD, foreground="#ffffff")
+            buf.create_tag("code", family="monospace", foreground="#f472b6", background="rgba(244,114,182,0.12)")
+            buf.create_tag("bullet", left_margin=20)
+            buf.create_tag("sub_bullet", left_margin=36)
+            buf.create_tag("divider", foreground="#475569", pixels_above_lines=8, pixels_below_lines=8)
+            buf.create_tag("table_row", family="monospace", foreground="#94a3b8", left_margin=12)
+
+        # 1. Clean HTML tags
+        text = re.sub(r"<[^>]+>", "", raw_notes)
+        # 2. Strip shields/badges: [![...](...)](...)
+        text = re.sub(r"\[\!\[[^\]]*\]\([^\)]*\)\]\([^\)]*\)", "", text)
+        # 3. Strip standalone markdown images: ![...](...)
+        text = re.sub(r"\!\[[^\]]*\]\([^\)]*\)", "", text)
+        # 4. Simplify links: [Text](url) -> Text
+        text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+
+        in_code = False
+        for line in text.splitlines():
+            line_s = line.strip()
+            if not line_s and not in_code:
+                buf.insert(buf.get_end_iter(), "\n")
+                continue
+
+            if line_s.startswith("```"):
+                in_code = not in_code
+                continue
+
+            if in_code:
+                buf.insert_with_tags_by_name(buf.get_end_iter(), "  " + line + "\n", "code")
+                continue
+
+            # Headings
+            if line_s.startswith("# "):
+                buf.insert_with_tags_by_name(buf.get_end_iter(), line_s[2:] + "\n", "h1")
+                continue
+            elif line_s.startswith("## "):
+                buf.insert_with_tags_by_name(buf.get_end_iter(), line_s[3:] + "\n", "h2")
+                continue
+            elif line_s.startswith("### "):
+                buf.insert_with_tags_by_name(buf.get_end_iter(), line_s[4:] + "\n", "h3")
+                continue
+            elif line_s.startswith("---") or line_s.startswith("___"):
+                buf.insert_with_tags_by_name(buf.get_end_iter(), "────────────────────────────────────────\n", "divider")
+                continue
+
+            # Tables (| col | col |)
+            if line_s.startswith("|") and line_s.endswith("|"):
+                if re.match(r"^\|[\s\-:\|]+\|$", line_s):
+                    continue
+                cells = [c.strip() for c in line_s.strip("|").split("|")]
+                table_line = "  • " + "  |  ".join(cells)
+                buf.insert_with_tags_by_name(buf.get_end_iter(), table_line + "\n", "table_row")
+                continue
+
+            # Bullets
+            is_bullet = False
+            tag_to_use = None
+            m_bullet = re.match(r"^(\s*)([*•\-]|\d+\.)\s+", line)
+            if m_bullet:
+                is_bullet = True
+                indent = len(m_bullet.group(1))
+                tag_to_use = "sub_bullet" if indent >= 2 else "bullet"
+                marker = "• " if m_bullet.group(2) in ["*", "-", "•"] else m_bullet.group(2) + " "
+                line_s = marker + line[m_bullet.end():]
+
+            # Parse inline bold and inline code
+            parts = re.split(r"(\*\*[^*]+\*\*|`[^`]+`)", line_s)
+            for part in parts:
+                if not part:
+                    continue
+                if part.startswith("**") and part.endswith("**"):
+                    buf.insert_with_tags_by_name(buf.get_end_iter(), part[2:-2], "bold")
+                elif part.startswith("`") and part.endswith("`"):
+                    buf.insert_with_tags_by_name(buf.get_end_iter(), part[1:-1], "code")
+                else:
+                    if tag_to_use:
+                        buf.insert_with_tags_by_name(buf.get_end_iter(), part, tag_to_use)
+                    else:
+                        buf.insert(buf.get_end_iter(), part)
+            buf.insert(buf.get_end_iter(), "\n")
+
     def _on_update_check_done(self, info) -> None:
         self._upd_check_btn.set_sensitive(True)
         self._upd_check_btn.set_label("Проверить сейчас")
@@ -1567,10 +1659,10 @@ class MainWindow(Adw.ApplicationWindow):
             self._show_toast("Обновлений нет — у вас актуальная версия")
             return
 
-        # Modern wide adaptive update window (720px wide)
+        # Fully adaptive responsive update window
         win = Gtk.Window(transient_for=self, modal=True, title="Обновление SPIZDILI_VPN")
-        win.set_default_size(720, 520)
-        win.set_size_request(400, 360)
+        win.set_default_size(780, 560)
+        win.set_size_request(420, 360)
         win.set_resizable(True)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -1580,25 +1672,25 @@ class MainWindow(Adw.ApplicationWindow):
         header.set_show_end_title_buttons(True)
         vbox.append(header)
 
-        clamp = Adw.Clamp(maximum_size=680, tightening_threshold=500)
+        clamp = Adw.Clamp(maximum_size=760, tightening_threshold=540)
         clamp.set_vexpand(True)
         clamp.set_hexpand(True)
         vbox.append(clamp)
 
-        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        inner.set_margin_top(16)
-        inner.set_margin_bottom(20)
-        inner.set_margin_start(24)
-        inner.set_margin_end(24)
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        inner.set_margin_top(14)
+        inner.set_margin_bottom(18)
+        inner.set_margin_start(20)
+        inner.set_margin_end(20)
         clamp.set_child(inner)
 
-        t_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, halign=Gtk.Align.CENTER)
+        t_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, halign=Gtk.Align.CENTER)
         h_lbl = Gtk.Label()
-        h_lbl.set_markup(f"<span size='20000' weight='bold'>🚀 Доступно обновление {info['tag']}</span>")
+        h_lbl.set_markup(f"<span size='18000' weight='bold'>🚀 Доступно обновление {info['tag']}</span>")
         t_box.append(h_lbl)
 
         sub_lbl = Gtk.Label()
-        sub_lbl.set_markup(f"<span size='11000' foreground='#89b4fa'>Текущая версия: v {APP_VERSION}  •  Новая версия: {info['tag']}</span>")
+        sub_lbl.set_markup(f"<span size='10500' foreground='#818cf8'>Текущая версия: v {APP_VERSION}  •  Новая версия: {info['tag']}</span>")
         t_box.append(sub_lbl)
         inner.append(t_box)
 
@@ -1607,17 +1699,24 @@ class MainWindow(Adw.ApplicationWindow):
         notes_label.add_css_class("heading")
         inner.append(notes_label)
 
-        scroll = Gtk.ScrolledWindow(vexpand=True)
-        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scroll.set_size_request(-1, 220)
+        # ScrolledWindow with NEVER horizontal policy for pure responsive width
+        scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_min_content_height(240)
         scroll.add_css_class("card")
 
-        notes_tv = Gtk.TextView(editable=False, cursor_visible=False, wrap_mode=Gtk.WrapMode.WORD)
-        notes_tv.set_top_margin(12)
-        notes_tv.set_bottom_margin(12)
+        notes_tv = Gtk.TextView(editable=False, cursor_visible=False, wrap_mode=Gtk.WrapMode.WORD_CHAR)
+        notes_tv.set_top_margin(14)
+        notes_tv.set_bottom_margin(14)
         notes_tv.set_left_margin(16)
         notes_tv.set_right_margin(16)
-        notes_tv.get_buffer().set_text(info.get("body") or "Свежее обновление с улучшенной производительностью и стабильностью.")
+        notes_tv.set_vexpand(True)
+        notes_tv.set_hexpand(True)
+        
+        # Parse markdown & remove HTML/shield tags into rich formatted buffer
+        raw_body = info.get("body") or "Свежее обновление с улучшенной производительностью и стабильностью."
+        self._populate_clean_release_notes(notes_tv.get_buffer(), raw_body)
+        
         scroll.set_child(notes_tv)
         inner.append(scroll)
 

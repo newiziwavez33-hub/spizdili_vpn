@@ -1,5 +1,5 @@
 """
-SPIZDILI_VPN v1.1.2 — Studio-Quality Desktop Interface for Windows
+SPIZDILI_VPN v1.2.0 — Studio-Quality Desktop Interface for Windows
 Exact replica of the AetherVPN Linux design:
 - Dark glassmorphism & world-map constellation background (world-map-bg.jpg)
 - Modern 44px top header with segmented pill switcher
@@ -24,8 +24,26 @@ from pathlib import Path
 from typing import Optional, Any
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
+try:
+    from windows.warp_service import generate_warp_profile
+    from windows.harvester import fetch_fresh_servers
+    from windows.smart_connect import select_best_live_server, TunnelHealthMonitor
+    from windows.speedtest_service import run_speed_test
+except ImportError:
+    try:
+        from warp_service import generate_warp_profile
+        from harvester import fetch_fresh_servers
+        from smart_connect import select_best_live_server, TunnelHealthMonitor
+        from speedtest_service import run_speed_test
+    except ImportError:
+        generate_warp_profile = None
+        fetch_fresh_servers = None
+        select_best_live_server = None
+        TunnelHealthMonitor = None
+        run_speed_test = None
+
 # Version info
-APP_VERSION = "1.1.2"
+APP_VERSION = "1.2.0"
 GITHUB_REPO_URL = "https://github.com/newiziwavez33-hub/spizdili_vpn"
 
 try:
@@ -340,7 +358,7 @@ class SpizdiliVPNApp:
         self.lbl_sidebar_status_dot = tk.Label(sidebar_bottom, text="● Отключено", font=("Segoe UI", 9, "bold"), fg="#94a3b8", bg="#1a1636")
         self.lbl_sidebar_status_dot.pack(anchor="w")
 
-        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.1.2", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
+        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.2.0", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
         lbl_sb_ver.pack(anchor="w", pady=(2, 0))
 
         # Central ViewStack Container
@@ -559,6 +577,51 @@ class SpizdiliVPNApp:
 
         lbl_s_title = tk.Label(toolbar, text=f"Доступные серверы ({len(self.servers)})", font=("Segoe UI", 14, "bold"), fg="#ffffff", bg="#0f0c20")
         lbl_s_title.pack(side="left")
+
+        btn_warp = tk.Button(
+            toolbar,
+            text="🛡️ Личный WARP",
+            font=("Segoe UI", 9, "bold"),
+            bg="#312e81",
+            fg="#a5b4fc",
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=5,
+            cursor="hand2",
+            command=self._create_personal_warp
+        )
+        btn_warp.pack(side="right", padx=3)
+
+        btn_harvest = tk.Button(
+            toolbar,
+            text="🔄 Свежие сервера",
+            font=("Segoe UI", 9),
+            bg="#211d3d",
+            fg="#94a3b8",
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=5,
+            cursor="hand2",
+            command=self._harvest_fresh_servers_async
+        )
+        btn_harvest.pack(side="right", padx=3)
+
+        btn_speed = tk.Button(
+            toolbar,
+            text="🚀 Тест скорости",
+            font=("Segoe UI", 9),
+            bg="#211d3d",
+            fg="#38bdf8",
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=5,
+            cursor="hand2",
+            command=self._run_speedtest_async
+        )
+        btn_speed.pack(side="right", padx=3)
 
         btn_ping_all = tk.Button(
             toolbar,
@@ -1013,7 +1076,7 @@ class SpizdiliVPNApp:
         btn_imp.pack(anchor="e", padx=16, pady=16)
 
     def _show_about_dialog(self) -> None:
-        """Display about modal dialog with raccoon mascot and v1.1.2."""
+        """Display about modal dialog with raccoon mascot and v1.2.0."""
         dlg = tk.Toplevel(self.root)
         dlg.title("О программе — SPIZDILI_VPN")
         dlg.geometry("420x460")

@@ -472,7 +472,6 @@ class VPNApplication(Adw.Application):
         /* ── HeaderBar Window Frame (Draggable & Integrated) ── */
         headerbar.aether-header {
             min-height: 44px;
-            max-height: 48px;
             background: #151329;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
@@ -822,8 +821,6 @@ class MainWindow(Adw.ApplicationWindow):
         self.connect("close-request", self._on_close_request)
 
     # ---- UI construction --------------------------------------------------
-
-
 
     def _minimize_to_tray(self) -> None:
         self.set_visible(False)
@@ -1994,16 +1991,49 @@ class MainWindow(Adw.ApplicationWindow):
             label.add_css_class("latency-bad")
 
     def _on_import_clicked(self, button: Gtk.Button) -> None:
-        """Open file chooser to import a .conf file."""
-        dialog = Gtk.FileDialog()
-        dialog.set_title("Импорт конфигурации WireGuard / Reality")
-        file_filter = Gtk.FileFilter()
-        file_filter.set_name("Конфигурации VPN (*.conf)")
-        file_filter.add_pattern("*.conf")
-        filter_model = Gio.ListStore.new(Gtk.FileFilter)
-        filter_model.append(file_filter)
-        dialog.set_filters(filter_model)
-        dialog.open(self, None, self._on_import_response)
+        """Open native file chooser to import a .conf file."""
+        try:
+            native = Gtk.FileChooserNative.new(
+                "Импорт конфигурации VPN (*.conf)",
+                self,
+                Gtk.FileChooserAction.OPEN,
+                "Импорт",
+                "Отмена",
+            )
+            file_filter = Gtk.FileFilter()
+            file_filter.set_name("Конфигурации VPN (*.conf)")
+            file_filter.add_pattern("*.conf")
+            native.add_filter(file_filter)
+
+            def on_response(dialog, response_id):
+                if response_id == Gtk.ResponseType.ACCEPT:
+                    gfile = dialog.get_file()
+                    if gfile:
+                        path = Path(gfile.get_path())
+                        try:
+                            cfg = self.cfg.import_config(path)
+                            self._refresh_profiles()
+                            self._show_toast(f"Импортирован профиль «{cfg.name}»")
+                        except Exception as e:
+                            self._show_toast(f"Ошибка импорта: {e}")
+                dialog.destroy()
+
+            native.connect("response", on_response)
+            native.show()
+        except Exception as exc:
+            logger.error("FileChooserNative error: %s, falling back to FileDialog", exc)
+            try:
+                dialog = Gtk.FileDialog()
+                dialog.set_title("Импорт конфигурации WireGuard / Reality")
+                file_filter = Gtk.FileFilter()
+                file_filter.set_name("Конфигурации VPN (*.conf)")
+                file_filter.add_pattern("*.conf")
+                filter_model = Gio.ListStore.new(Gtk.FileFilter)
+                filter_model.append(file_filter)
+                dialog.set_filters(filter_model)
+                dialog.open(self, None, self._on_import_response)
+            except Exception as e2:
+                self._show_toast(f"Ошибка открытия диалога: {e2}")
 
     def _on_import_response(self, dialog: Gtk.FileDialog, result: Gio.AsyncResult) -> None:
         try:
@@ -2016,7 +2046,6 @@ class MainWindow(Adw.ApplicationWindow):
             self._show_toast(f"Импортирован профиль «{cfg.name}»")
             logger.info("Imported profile '%s' from %s", cfg.name, path)
         except GLib.Error:
-            # User cancelled the dialog
             pass
         except Exception as exc:
             self._show_toast(f"Ошибка импорта: {exc}")
@@ -2024,9 +2053,13 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_import_link_clicked(self, button: Gtk.Button) -> None:
         """Open subscription / link import dialog."""
-        dialog = SubscriptionImportDialog(parent=self, config_manager=self.cfg)
-        dialog.connect("imported", lambda d, n: self._refresh_profiles())
-        dialog.present(self)
+        try:
+            dialog = SubscriptionImportDialog(parent=self, config_manager=self.cfg)
+            dialog.connect("imported", lambda d, n: self._refresh_profiles())
+            dialog.present()
+        except Exception as exc:
+            logger.error("Error opening SubscriptionImportDialog: %s", exc)
+            self._show_toast(f"Ошибка открытия: {exc}")
 
     def _on_check_all_latencies_clicked(self, button: Gtk.Button) -> None:
         """Check latencies for all stored profiles in parallel."""
@@ -2592,18 +2625,7 @@ class EditConfigDialog(Adw.Window):
 
 
 
-    def _minimize_to_tray(self) -> None:
-        self.set_visible(False)
 
-    def _navigate_to(self, page_id: str) -> None:
-        if hasattr(self, "_stack") and self._stack:
-            self._stack.set_visible_child_name(page_id)
-        if hasattr(self, "_nav_buttons"):
-            for pid, btn in self._nav_buttons.items():
-                if pid == page_id:
-                    btn.add_css_class("active")
-                else:
-                    btn.remove_css_class("active")
 
     def _build_ui(self) -> None:
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -2789,18 +2811,7 @@ class SubscriptionImportDialog(Adw.Window):
 
 
 
-    def _minimize_to_tray(self) -> None:
-        self.set_visible(False)
 
-    def _navigate_to(self, page_id: str) -> None:
-        if hasattr(self, "_stack") and self._stack:
-            self._stack.set_visible_child_name(page_id)
-        if hasattr(self, "_nav_buttons"):
-            for pid, btn in self._nav_buttons.items():
-                if pid == page_id:
-                    btn.add_css_class("active")
-                else:
-                    btn.remove_css_class("active")
 
     def _build_ui(self) -> None:
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -3098,18 +3109,7 @@ class ProfileHealthDialog(Adw.Window):
 
 
 
-    def _minimize_to_tray(self) -> None:
-        self.set_visible(False)
 
-    def _navigate_to(self, page_id: str) -> None:
-        if hasattr(self, "_stack") and self._stack:
-            self._stack.set_visible_child_name(page_id)
-        if hasattr(self, "_nav_buttons"):
-            for pid, btn in self._nav_buttons.items():
-                if pid == page_id:
-                    btn.add_css_class("active")
-                else:
-                    btn.remove_css_class("active")
 
     def _build_ui(self) -> None:
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)

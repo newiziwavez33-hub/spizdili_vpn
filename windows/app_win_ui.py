@@ -1,5 +1,5 @@
 """
-SPIZDILI_VPN v1.1.0 — Studio-Quality Desktop Interface for Windows
+SPIZDILI_VPN v1.1.2 — Studio-Quality Desktop Interface for Windows
 Exact replica of the AetherVPN Linux design:
 - Dark glassmorphism & world-map constellation background (world-map-bg.jpg)
 - Modern 44px top header with segmented pill switcher
@@ -25,7 +25,7 @@ from typing import Optional, Any
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
 # Version info
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.2"
 GITHUB_REPO_URL = "https://github.com/newiziwavez33-hub/spizdili_vpn"
 
 try:
@@ -340,7 +340,7 @@ class SpizdiliVPNApp:
         self.lbl_sidebar_status_dot = tk.Label(sidebar_bottom, text="● Отключено", font=("Segoe UI", 9, "bold"), fg="#94a3b8", bg="#1a1636")
         self.lbl_sidebar_status_dot.pack(anchor="w")
 
-        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.1.0", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
+        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.1.2", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
         lbl_sb_ver.pack(anchor="w", pady=(2, 0))
 
         # Central ViewStack Container
@@ -472,7 +472,9 @@ class SpizdiliVPNApp:
         r = self.btn_radius
 
         # 1. Outer Neon Aura Glow
-        glow_color = (16, 185, 129, 35) if connected else (79, 70, 229, 45)
+        glow_color = (16, 185, 129, 40) if connected else (79, 70, 229, 50)
+        # Extra subtle outer pulse ring
+        draw.ellipse([cx - r - 22, cy - r - 22, cx + r + 22, cy + r + 22], outline=glow_color, width=1)
         for i in range(15, 0, -2):
             draw.ellipse([cx - r - i, cy - r - i, cx + r + i, cy + r + i], outline=glow_color, width=2)
 
@@ -1011,7 +1013,7 @@ class SpizdiliVPNApp:
         btn_imp.pack(anchor="e", padx=16, pady=16)
 
     def _show_about_dialog(self) -> None:
-        """Display about modal dialog with raccoon mascot and v1.1.0."""
+        """Display about modal dialog with raccoon mascot and v1.1.2."""
         dlg = tk.Toplevel(self.root)
         dlg.title("О программе — SPIZDILI_VPN")
         dlg.geometry("420x460")

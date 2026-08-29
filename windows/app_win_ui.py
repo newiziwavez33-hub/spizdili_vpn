@@ -1,5 +1,5 @@
 """
-SPIZDILI_VPN v1.2.1 — Studio-Quality Desktop Interface for Windows
+SPIZDILI_VPN v1.2.2 — Studio-Quality Desktop Interface for Windows
 Exact replica of the AetherVPN Linux design:
 - Dark glassmorphism & world-map constellation background (world-map-bg.jpg)
 - Modern 44px top header with segmented pill switcher
@@ -43,7 +43,7 @@ except ImportError:
         run_speed_test = None
 
 # Version info
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 GITHUB_REPO_URL = "https://github.com/newiziwavez33-hub/spizdili_vpn"
 
 try:
@@ -359,7 +359,7 @@ class SpizdiliVPNApp:
         self.lbl_sidebar_status_dot = tk.Label(sidebar_bottom, text="● Отключено", font=("Segoe UI", 9, "bold"), fg="#94a3b8", bg="#1a1636")
         self.lbl_sidebar_status_dot.pack(anchor="w")
 
-        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.2.1", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
+        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.2.2", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
         lbl_sb_ver.pack(anchor="w", pady=(2, 0))
 
         # Central ViewStack Container
@@ -1209,7 +1209,7 @@ class SpizdiliVPNApp:
         btn_imp.pack(anchor="e", padx=16, pady=16)
 
     def _show_about_dialog(self) -> None:
-        """Display about modal dialog with raccoon mascot and v1.2.1."""
+        """Display about modal dialog with raccoon mascot and v1.2.2."""
         dlg = tk.Toplevel(self.root)
         dlg.title("О программе — SPIZDILI_VPN")
         dlg.geometry("420x460")

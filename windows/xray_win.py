@@ -148,19 +148,51 @@ class WindowsXrayManager:
             }
         ]
 
-        # Policy
+        # Policy with 256KB buffer for smooth YouTube 4K
         cfg["policy"] = {
             "levels": {
                 "0": {
                     "handshake": 10,
-                    "connIdle": 900,
+                    "connIdle": 1200,
                     "uplinkOnly": 15,
                     "downlinkOnly": 30,
                     "statsUserUplink": True,
                     "statsUserDownlink": True,
-                    "bufferSize": 65536
+                    "bufferSize": 262144
                 }
             }
+        }
+
+        # YouTube 4K Acceleration & QUIC blocking
+        cfg["routing"] = {
+            "domainStrategy": "IPIfNonMatch",
+            "rules": [
+                {
+                    "type": "field",
+                    "ip": ["10.0.0.0/8", "100.64.0.0/10", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"],
+                    "outboundTag": "direct"
+                },
+                {
+                    "type": "field",
+                    "port": "443",
+                    "network": "udp",
+                    "outboundTag": "block"
+                },
+                {
+                    "type": "field",
+                    "domain": [
+                        "domain:youtube.com", "domain:googlevideo.com", "domain:ytimg.com",
+                        "domain:ggpht.com", "domain:gvt1.com", "domain:youtube-nocookie.com",
+                        "domain:youtu.be", "domain:yt.be", "domain:googleusercontent.com"
+                    ],
+                    "outboundTag": "proxy"
+                },
+                {
+                    "type": "field",
+                    "network": "tcp,udp",
+                    "outboundTag": "proxy"
+                }
+            ]
         }
 
         return cfg

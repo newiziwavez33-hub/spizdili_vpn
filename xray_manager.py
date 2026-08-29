@@ -301,7 +301,7 @@ class XrayManager:
                     "downlinkOnly": 30,
                     "statsUserUplink": True,
                     "statsUserDownlink": True,
-                    "bufferSize": 65536
+                    "bufferSize": 262144
                 }
             },
             "system": {
@@ -330,7 +330,7 @@ class XrayManager:
             "queryStrategy": "UseIPv4"
         }
 
-        # Clean routing rules: bypass local LAN subnets, send 100% of ALL other traffic to proxy
+        # Clean routing rules with YouTube & Google Video 4K Acceleration
         cfg["routing"] = {
             "domainStrategy": "IPIfNonMatch",
             "rules": [
@@ -342,6 +342,23 @@ class XrayManager:
                         "fc00::/7", "fe80::/10", "ff00::/8", "127.0.0.0/8"
                     ],
                     "outboundTag": "direct"
+                },
+                # Block UDP:443 (QUIC) so YouTube immediately uses lightning-fast TCP HTTP/2 without buffering
+                {
+                    "type": "field",
+                    "port": "443",
+                    "network": "udp",
+                    "outboundTag": "block"
+                },
+                # Prioritize YouTube & Google Video domains to proxy
+                {
+                    "type": "field",
+                    "domain": [
+                        "domain:youtube.com", "domain:googlevideo.com", "domain:ytimg.com",
+                        "domain:ggpht.com", "domain:gvt1.com", "domain:youtube-nocookie.com",
+                        "domain:youtu.be", "domain:yt.be", "domain:googleusercontent.com"
+                    ],
+                    "outboundTag": "proxy"
                 },
                 {
                     "type": "field",

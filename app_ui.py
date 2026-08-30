@@ -1484,13 +1484,13 @@ class MainWindow(Adw.ApplicationWindow):
     # ---- Profiles page ----------------------------------------------------
 
     def _on_audit_and_purge_dead_servers(self, _btn=None) -> None:
-        """Ping all servers in parallel via TCP; exclude and purge dead servers from the list."""
+        """Ping all servers in parallel via TCP; exclude dead servers and show detailed results dialog."""
         if hasattr(self, "_btn_audit_servers"):
             self._btn_audit_servers.set_sensitive(False)
             self._btn_audit_servers.set_label("⏳ Проверка сети…")
         if hasattr(self, "_loc_audit_btn"):
             self._loc_audit_btn.set_sensitive(False)
-        self._show_toast("⚡ Экспресс-проверка всех серверов: измерение задержки и отсев мёртвых…", timeout=5)
+        self._show_toast("⚡ Экспресс-проверка: замер задержки каждого узла и отсев мёртвых…", timeout=4)
 
         def _task():
             try:
@@ -1508,27 +1508,33 @@ class MainWindow(Adw.ApplicationWindow):
                     port = int(s.get("port", 443))
                     t0 = time.time()
                     try:
-                        with socket.create_connection((addr, port), timeout=1.5):
+                        with socket.create_connection((addr, port), timeout=1.8):
                             lat = (time.time() - t0) * 1000.0
-                            return s, True, lat
+                            return s, True, round(lat, 1)
                     except Exception:
                         return s, False, 9999.0
 
                 alive_servers = []
                 dead_servers = []
-                with concurrent.futures.ThreadPoolExecutor(max_workers=25) as ex:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=35) as ex:
                     results = list(ex.map(test_srv, servers))
 
                 for s, ok, lat in results:
                     if ok:
-                        self._latencies[s.get("ascii_name", s.get("name", ""))] = lat
-                        self._latencies[s.get("name", "")] = lat
-                        alive_servers.append(s)
+                        s_name = s.get("name", "")
+                        self._latencies[s.get("ascii_name", s_name)] = lat
+                        self._latencies[s_name] = lat
+                        s["ping_ms"] = lat
+                        alive_servers.append((s, lat))
                     else:
                         dead_servers.append(s)
 
-                # Save ONLY alive servers back to json
-                reality_fetcher.save_servers_to_system(alive_servers)
+                # Sort by fastest latency first
+                alive_servers.sort(key=lambda x: x[1])
+                saved_alive_json = [item[0] for item in alive_servers]
+
+                # Save ONLY verified alive servers back to json
+                reality_fetcher.save_servers_to_system(saved_alive_json)
 
                 def on_done():
                     self._refresh_profiles()
@@ -1540,10 +1546,66 @@ class MainWindow(Adw.ApplicationWindow):
 
                     n_alive = len(alive_servers)
                     n_dead = len(dead_servers)
-                    if n_dead > 0:
-                        self._show_toast(f"✓ Проверено {len(servers)} узлов: {n_alive} активных сохранено, {n_dead} нерабочих исключено!", timeout=7)
-                    else:
-                        self._show_toast(f"✓ Все {n_alive} серверов активны и проверены!", timeout=5)
+
+                    # Show Results Dialog with interactive list and pings
+                    dlg = Adw.Window(
+                        title="Результаты аудита серверов",
+                        default_width=500,
+                        default_height=560,
+                        modal=True,
+                        transient_for=self,
+                    )
+                    dlg_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+                    dlg.set_content(dlg_box)
+
+                    hdr = Adw.HeaderBar()
+                    close_btn = Gtk.Button(label="Готово")
+                    close_btn.add_css_class("suggested-action")
+                    close_btn.connect("clicked", lambda _: dlg.close())
+                    hdr.pack_end(close_btn)
+                    dlg_box.append(hdr)
+
+                    scr = Gtk.ScrolledWindow(vexpand=True)
+                    clamp = Adw.Clamp(maximum_size=460)
+                    cnt = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+                    cnt.set_margin_top(16)
+                    cnt.set_margin_bottom(16)
+                    cnt.set_margin_start(16)
+                    cnt.set_margin_end(16)
+                    clamp.set_child(cnt)
+                    scr.set_child(clamp)
+                    dlg_box.append(scr)
+
+                    summary_grp = Adw.PreferencesGroup(
+                        title=f"✓ Проверено {len(servers)} узлов",
+                        description=f"🟢 Активно и сохранено: <b>{n_alive}</b>  •  🔴 Исключено нерабочих: <b>{n_dead}</b>",
+                    )
+                    cnt.append(summary_grp)
+
+                    res_grp = Adw.PreferencesGroup(title="Рабочие серверы (по скорости)")
+                    res_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+                    res_list.add_css_class("boxed-list")
+
+                    for s_obj, lat_val in alive_servers:
+                        row = Adw.ActionRow(
+                            title=s_obj.get("name", "Server"),
+                            subtitle=f"{s_obj.get('address', '')}:{s_obj.get('port', '')}",
+                        )
+                        # Latency badge
+                        lat_badge = Gtk.Label(label=f"⚡ {lat_val:.0f} ms")
+                        lat_badge.set_valign(Gtk.Align.CENTER)
+                        if lat_val < 50:
+                            lat_badge.add_css_class("badge-wg")
+                        elif lat_val < 150:
+                            lat_badge.add_css_class("badge-awg")
+                        else:
+                            lat_badge.add_css_class("badge-warp")
+                        row.add_suffix(lat_badge)
+                        res_list.append(row)
+
+                    res_grp.add(res_list)
+                    cnt.append(res_grp)
+                    dlg.present()
 
                 GLib.idle_add(on_done)
             except Exception as e:

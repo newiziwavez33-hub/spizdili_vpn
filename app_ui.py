@@ -43,7 +43,7 @@ except ImportError:
 try:
     from version import APP_VERSION
 except ImportError:
-    APP_VERSION = "1.2.4"
+    APP_VERSION = "1.2.5"
 
 __all__ = ["VPNApplication"]
 
@@ -758,7 +758,7 @@ class VPNApplication(Adw.Application):
         try:
             from version import APP_VERSION
         except Exception:
-            APP_VERSION = "1.2.4"
+            APP_VERSION = "1.2.5"
 
         about = Adw.AboutWindow(
             application_name="SPIZDILI_VPN",
@@ -793,7 +793,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.4)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.5)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -879,7 +879,7 @@ class MainWindow(Adw.ApplicationWindow):
         header_brand.append(app_title)
 
         ver_badge = Gtk.Label()
-        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.4</span>")
+        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.5</span>")
         ver_badge.add_css_class("badge-awg")
         header_brand.append(ver_badge)
         header.pack_start(header_brand)
@@ -966,7 +966,7 @@ class MainWindow(Adw.ApplicationWindow):
         bot_box.set_margin_bottom(10)
         bot_box.set_margin_start(6)
         v_lbl = Gtk.Label()
-        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.4 • Protected</span>")
+        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.5 • Protected</span>")
         v_lbl.set_halign(Gtk.Align.START)
         bot_box.append(v_lbl)
         self._sidebar.append(bot_box)
@@ -1631,7 +1631,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Interactive Search Entry for instant real-time filtering
         # ── Smart Features Banner (WARP / Harvest / Speed) ───────────────
-        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.4")
+        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.5")
 
         warp_row = Adw.ActionRow(title="🛡️ Личный Cloudflare WARP", subtitle="Бесплатный персональный гигабитный сервер без ограничений")
         self._btn_warp_create = Gtk.Button(label="Создать")
@@ -2371,64 +2371,162 @@ class MainWindow(Adw.ApplicationWindow):
         import threading as _th
         _th.Thread(target=_delayed, daemon=True).start()
 
-    # ── Auto-select and connect fastest Cloud (1-5) on startup ─────────
+    # ── Startup Modal Server Auditor with Live Gauge & Dead Servers Purge ──
 
     def _auto_select_fastest_cloud(self) -> None:
+        """Launch startup modal dialog with gauge to audit all servers, purge dead, and connect to best."""
         if self._connected or self._connecting:
             return
 
-        cloud_candidates = [f"Cloud-{i}" for i in range(1, 7)]
-        available = [p for p in cloud_candidates if hasattr(self, "_profile_names") and p in self._profile_names]
-        if not available:
+        import reality_fetcher
+        servers = reality_fetcher.load_cached_servers()
+        if not servers:
             return
 
-        self._show_toast("🔍 Проверка серверов Облако 1–6 и выбор самого быстрого…", timeout=3)
+        # Modal startup audit window
+        dialog = Adw.Window(
+            title="Проверка доступности узлов",
+            default_width=440,
+            default_height=320,
+            modal=True,
+            transient_for=self,
+        )
+        dialog.add_css_class("aether-window")
+
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        main_box.set_margin_top(24)
+        main_box.set_margin_bottom(24)
+        main_box.set_margin_start(24)
+        main_box.set_margin_end(24)
+        main_box.set_valign(Gtk.Align.CENTER)
+        dialog.set_content(main_box)
+
+        # Header with raccoon/radar icon
+        hdr_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.CENTER)
+        lbl_icon = Gtk.Label()
+        lbl_icon.set_markup("<span size='20000'>📡</span>")
+        hdr_box.append(lbl_icon)
+
+        lbl_t = Gtk.Label()
+        lbl_t.set_markup("<span size='14000' weight='heavy' color='#ffffff'>Аудит и отбор серверов</span>")
+        hdr_box.append(lbl_t)
+        main_box.append(hdr_box)
+
+        lbl_status = Gtk.Label()
+        lbl_status.set_markup("<span size='11000' color='#94a3b8'>Параллельная проверка отклика серверов и отсев мёртвых…</span>")
+        lbl_status.set_halign(Gtk.Align.CENTER)
+        main_box.append(lbl_status)
+
+        # Progress bar (Показометр)
+        prog_bar = Gtk.ProgressBar()
+        prog_bar.set_fraction(0.0)
+        prog_bar.set_size_request(380, 10)
+        prog_bar.add_css_class("suggested-action")
+        main_box.append(prog_bar)
+
+        # Stats badges row
+        stats_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, halign=Gtk.Align.CENTER)
+
+        b_total = Gtk.Label()
+        b_total.set_markup(f"<span size='9500' color='#94a3b8'>Всего: </span><span size='9500' weight='bold' color='#ffffff'>{len(servers)}</span>")
+        b_total.add_css_class("badge-awg")
+        stats_row.append(b_total)
+
+        b_alive = Gtk.Label()
+        b_alive.set_markup("<span size='9500' color='#94a3b8'>Активно: </span><span size='9500' weight='bold' color='#34d399'>0</span>")
+        b_alive.add_css_class("badge-awg")
+        stats_row.append(b_alive)
+
+        b_dead = Gtk.Label()
+        b_dead.set_markup("<span size='9500' color='#94a3b8'>Отсеяно: </span><span size='9500' weight='bold' color='#f87171'>0</span>")
+        b_dead.add_css_class("badge-awg")
+        stats_row.append(b_dead)
+
+        main_box.append(stats_row)
+
+        lbl_current = Gtk.Label()
+        lbl_current.set_markup("<span size='9500' color='#64748b'>Инициализация сокетов TCP…</span>")
+        lbl_current.set_halign(Gtk.Align.CENTER)
+        main_box.append(lbl_current)
+
+        dialog.present()
 
         def _worker():
-            best_profile = None
-            best_ping = 999999.0
+            import concurrent.futures, socket, time
+            total_n = len(servers)
+            alive_srvs = []
+            dead_srvs = []
+            best_srv = None
+            best_lat = 999999.0
+            done_count = 0
 
-            for p_name in available:
-                if self._connected or self._connecting:
-                    return
-                s_data = self.vpn.xray.get_server_data(p_name)
-                if not s_data:
-                    continue
-                addr = s_data.get("address")
-                port = s_data.get("port", 443)
-                if not addr:
-                    continue
-
+            def check_one(s):
+                addr = s.get("address", "")
+                port = int(s.get("port", 443))
+                t0 = time.perf_counter()
                 try:
-                    import socket, time
-                    t0 = time.perf_counter()
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.settimeout(1.2)
-                    sock.connect((addr, int(port)))
+                    if sock.connect_ex((addr, port)) == 0:
+                        sock.close()
+                        dt = (time.perf_counter() - t0) * 1000.0
+                        return (s, True, dt)
                     sock.close()
-                    lat = (time.perf_counter() - t0) * 1000
-                    if lat < best_ping:
-                        best_ping = lat
-                        best_profile = p_name
                 except Exception:
                     pass
+                return (s, False, 99999.0)
 
-            if best_profile:
-                GLib.idle_add(self._on_auto_cloud_selected, best_profile, round(best_ping, 1))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
+                futures = {ex.submit(check_one, s): s for s in servers}
+                for f in concurrent.futures.as_completed(futures):
+                    s, ok, lat = f.result()
+                    done_count += 1
+                    frac = done_count / total_n
+
+                    if ok:
+                        alive_srvs.append(s)
+                        name_key = s.get("ascii_name", s.get("name", ""))
+                        self._latencies[name_key] = lat
+                        self._latencies[s.get("name", "")] = lat
+                        if lat < best_lat:
+                            best_lat = lat
+                            best_srv = s
+                    else:
+                        dead_srvs.append(s)
+
+                    def update_ui(cnt=done_count, fr=frac, n_al=len(alive_srvs), n_dd=len(dead_srvs), last_s=s):
+                        prog_bar.set_fraction(fr)
+                        b_alive.set_markup(f"<span size='9500' color='#94a3b8'>Активно: </span><span size='9500' weight='bold' color='#34d399'>{n_al}</span>")
+                        b_dead.set_markup(f"<span size='9500' color='#94a3b8'>Отсеяно: </span><span size='9500' weight='bold' color='#f87171'>{n_dd}</span>")
+                        lbl_current.set_markup(f"<span size='9500' color='#818cf8'>Проверено {cnt}/{total_n}: {last_s.get('name', '')[:28]}</span>")
+
+                    GLib.idle_add(update_ui)
+
+            # Purge dead servers from database
+            if alive_srvs:
+                reality_fetcher.save_servers_to_system(alive_srvs)
+
+            def on_complete():
+                self._refresh_profiles()
+                time.sleep(0.3)
+                dialog.close()
+
+                if best_srv and not self._connected:
+                    b_name = best_srv.get("name", "")
+                    if hasattr(self, "_profile_names") and b_name in self._profile_names:
+                        idx = self._profile_names.index(b_name)
+                        if hasattr(self, "_profile_dropdown_row"):
+                            self._profile_dropdown_row.set_selected(idx)
+                        self.cfg.set_last_connected(b_name)
+                        self._show_toast(f"⚡ Отсеяно {len(dead_srvs)} мёртвых узлов. Подключение к «{get_server_display_title(b_name)}» ({int(best_lat)} ms)!", timeout=5)
+                        self._do_connect(b_name)
+                elif dead_srvs:
+                    self._show_toast(f"✓ Проверка завершена: {len(alive_srvs)} онлайн, {len(dead_srvs)} нерабочих исключено!", timeout=5)
+
+            GLib.idle_add(on_complete)
 
         import threading as _th
         _th.Thread(target=_worker, daemon=True).start()
-
-    def _on_auto_cloud_selected(self, profile_name: str, latency: float) -> None:
-        if self._connected or self._connecting:
-            return
-        if hasattr(self, "_profile_names") and profile_name in self._profile_names:
-            idx = self._profile_names.index(profile_name)
-            self._profile_dropdown_row.set_selected(idx)
-            self.cfg.set_last_connected(profile_name)
-            display_title = get_server_display_title(profile_name)
-            self._show_toast(f"⚡ Самый быстрый: {display_title} ({int(latency)} ms) — подключаем!", timeout=4)
-            self._do_connect(profile_name)
 
     def _on_import_incy_servers_clicked(self, button: Gtk.Button) -> None:
         from incy_importer import IncyImporter

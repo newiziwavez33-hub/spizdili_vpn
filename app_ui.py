@@ -758,7 +758,7 @@ class VPNApplication(Adw.Application):
         try:
             from version import APP_VERSION
         except Exception:
-            APP_VERSION = "1.2.6"
+            APP_VERSION = "1.2.7"
 
         about = Adw.AboutWindow(
             application_name="SPIZDILI_VPN",
@@ -793,7 +793,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.6)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.7)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -879,7 +879,7 @@ class MainWindow(Adw.ApplicationWindow):
         header_brand.append(app_title)
 
         ver_badge = Gtk.Label()
-        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.6</span>")
+        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.7</span>")
         ver_badge.add_css_class("badge-awg")
         header_brand.append(ver_badge)
         header.pack_start(header_brand)
@@ -966,7 +966,7 @@ class MainWindow(Adw.ApplicationWindow):
         bot_box.set_margin_bottom(10)
         bot_box.set_margin_start(6)
         v_lbl = Gtk.Label()
-        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.6 • Protected</span>")
+        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.7 • Protected</span>")
         v_lbl.set_halign(Gtk.Align.START)
         bot_box.append(v_lbl)
         self._sidebar.append(bot_box)
@@ -995,8 +995,6 @@ class MainWindow(Adw.ApplicationWindow):
         # Initial active tab highlight
         self._navigate_to("connection")
 
-        # Auto-check Cloud 1-5 and connect to fastest
-        GLib.timeout_add_seconds(1, lambda: self._auto_select_fastest_cloud() or False)
         # Auto-check updates
         GLib.timeout_add_seconds(5, lambda: self._schedule_auto_update_check() or False)
 
@@ -1631,7 +1629,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Interactive Search Entry for instant real-time filtering
         # ── Smart Features Banner (WARP / Harvest / Speed) ───────────────
-        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.6")
+        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.7")
 
         warp_row = Adw.ActionRow(title="🛡️ Личный Cloudflare WARP", subtitle="Бесплатный персональный гигабитный сервер без ограничений")
         self._btn_warp_create = Gtk.Button(label="Создать")
@@ -3430,17 +3428,36 @@ class MainWindow(Adw.ApplicationWindow):
     # ---- Window close behavior --------------------------------------------
 
     def _on_close_request(self, window: Adw.ApplicationWindow) -> bool:
-        # Hide window to tray on close button click
-        self.set_visible(False)
-        return True  # prevent destruction, keep running in background
+        """Full termination: cleanly exit application and release memory immediately."""
+        logger.info("Window close request received — terminating application completely...")
+        self.shutdown()
+        if hasattr(self, "app") and self.app:
+            self.app.quit()
+        # Ensure complete removal from OS process memory
+        import os
+        import signal
+        try:
+            os.kill(os.getpid(), signal.SIGTERM)
+        except Exception:
+            pass
+        return False
 
     def shutdown(self) -> None:
-        """Graceful shutdown: disconnect VPN, stop timers."""
+        """Graceful shutdown: disconnect VPN, stop timers, kill helper subprocesses."""
         if self._shutting_down:
             return
         self._shutting_down = True
         self._stop_stats_timer()
-        # Disconnect is handled in main.py signal handler
+        if hasattr(self, "vpn") and self.vpn:
+            try:
+                self.vpn.disconnect()
+            except Exception:
+                pass
+            if hasattr(self.vpn, "xray_manager") and self.vpn.xray_manager:
+                try:
+                    self.vpn.xray_manager.disconnect()
+                except Exception:
+                    pass
         logger.info("Window shutdown complete")
 
     # ---- Logs -------------------------------------------------------------

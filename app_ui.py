@@ -43,7 +43,7 @@ except ImportError:
 try:
     from version import APP_VERSION
 except ImportError:
-    APP_VERSION = "1.2.5"
+    APP_VERSION = "1.2.6"
 
 __all__ = ["VPNApplication"]
 
@@ -758,7 +758,7 @@ class VPNApplication(Adw.Application):
         try:
             from version import APP_VERSION
         except Exception:
-            APP_VERSION = "1.2.5"
+            APP_VERSION = "1.2.6"
 
         about = Adw.AboutWindow(
             application_name="SPIZDILI_VPN",
@@ -793,7 +793,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.5)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.6)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -879,7 +879,7 @@ class MainWindow(Adw.ApplicationWindow):
         header_brand.append(app_title)
 
         ver_badge = Gtk.Label()
-        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.5</span>")
+        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.6</span>")
         ver_badge.add_css_class("badge-awg")
         header_brand.append(ver_badge)
         header.pack_start(header_brand)
@@ -966,7 +966,7 @@ class MainWindow(Adw.ApplicationWindow):
         bot_box.set_margin_bottom(10)
         bot_box.set_margin_start(6)
         v_lbl = Gtk.Label()
-        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.5 • Protected</span>")
+        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.6 • Protected</span>")
         v_lbl.set_halign(Gtk.Align.START)
         bot_box.append(v_lbl)
         self._sidebar.append(bot_box)
@@ -1631,7 +1631,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Interactive Search Entry for instant real-time filtering
         # ── Smart Features Banner (WARP / Harvest / Speed) ───────────────
-        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.5")
+        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.6")
 
         warp_row = Adw.ActionRow(title="🛡️ Личный Cloudflare WARP", subtitle="Бесплатный персональный гигабитный сервер без ограничений")
         self._btn_warp_create = Gtk.Button(label="Создать")
@@ -2464,20 +2464,34 @@ class MainWindow(Adw.ApplicationWindow):
             def check_one(s):
                 addr = s.get("address", "")
                 port = int(s.get("port", 443))
+                sni = s.get("sni") or s.get("address", "")
                 t0 = time.perf_counter()
                 try:
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(1.2)
+                    sock.settimeout(1.5)
                     if sock.connect_ex((addr, port)) == 0:
-                        sock.close()
-                        dt = (time.perf_counter() - t0) * 1000.0
-                        return (s, True, dt)
+                        # Attempt lightweight TLS ClientHello probe for real TLS/Reality response
+                        try:
+                            import ssl
+                            ctx = ssl.create_default_context()
+                            ctx.check_hostname = False
+                            ctx.verify_mode = ssl.CERT_NONE
+                            tls_sock = ctx.wrap_socket(sock, server_hostname=sni or addr)
+                            tls_sock.settimeout(1.5)
+                            dt = (time.perf_counter() - t0) * 1000.0
+                            tls_sock.close()
+                            return (s, True, dt)
+                        except Exception:
+                            # Socket connected cleanly, accept as alive
+                            dt = (time.perf_counter() - t0) * 1000.0
+                            sock.close()
+                            return (s, True, dt)
                     sock.close()
                 except Exception:
                     pass
                 return (s, False, 99999.0)
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=15) as ex:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=18) as ex:
                 futures = {ex.submit(check_one, s): s for s in servers}
                 for f in concurrent.futures.as_completed(futures):
                     s, ok, lat = f.result()
@@ -2503,8 +2517,20 @@ class MainWindow(Adw.ApplicationWindow):
 
                     GLib.idle_add(update_ui)
 
-            # Purge dead servers from database
+            # Purge dead servers from database and disk profiles
             if alive_srvs:
+                # Remove obsolete conf files of dead servers
+                from pathlib import Path
+                prof_dir = Path.home() / ".config" / "wavez-vpn" / "profiles"
+                if prof_dir.is_dir():
+                    alive_names = {s.get("ascii_name") for s in alive_srvs if s.get("ascii_name")}
+                    for conf_f in prof_dir.glob("*.conf"):
+                        stem = conf_f.stem
+                        if (stem.startswith("Fresh-") or stem.startswith("Cloud-") or stem.startswith("harv_")) and stem not in alive_names:
+                            try:
+                                conf_f.unlink(missing_ok=True)
+                            except Exception:
+                                pass
                 reality_fetcher.save_servers_to_system(alive_srvs)
 
             def on_complete():

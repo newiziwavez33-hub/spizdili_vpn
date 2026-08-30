@@ -2,7 +2,7 @@
   <img src="icons/spizdili-logo.png" width="220" alt="SPIZDILI_VPN Logo" />
 </p>
 
-<h1 align="center">🦝 SPIZDILI_VPN (v1.2.3)</h1>
+<h1 align="center">🦝 SPIZDILI_VPN (v1.2.4)</h1>
 
 <p align="center">
   <b>Современный, автономный и быстрый VPN-клиент нового поколения для Windows и Linux</b><br>
@@ -16,7 +16,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-7%20%7C%208%20%7C%2010%20%7C%2011-0078D6?style=flat-square&logo=windows" alt="Windows" />
   <img src="https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Debian%20%7C%20Arch%20%7C%20Fedora%20%7C%20Astra-E95420?style=flat-square&logo=ubuntu" alt="Linux" />
-  <img src="https://img.shields.io/badge/Version-v1.2.3-blue?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-v1.2.4-blue?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/Servers-51%20Nodes-success?style=flat-square" alt="Servers" />
   <img src="https://img.shields.io/badge/Protocols-VLESS%20Reality%20%7C%20Cloudflare%20WARP%20%7C%20WireGuard%20%7C%20AWG-purple?style=flat-square" alt="Protocols" />
   <img src="https://img.shields.io/badge/AI%20Optimized-Antigravity%20%7C%20Gemini%20%7C%20Claude%20%7C%20ChatGPT-brightgreen?style=flat-square" alt="AI Optimized" />
@@ -30,7 +30,7 @@
 Версия для Windows собрана в виде **автономного `.exe` файла**, работающего «из коробки» на любой версии Windows:
 
 1. Перейдите во вкладку **[Releases](https://github.com/newiziwavez33-hub/spizdili_vpn/releases/latest)**.
-2. Скачайте **`SPIZDILI_VPN.exe`** (или `SPIZDILI_VPN_v1.2.3_Windows_x64.zip`).
+2. Скачайте **`SPIZDILI_VPN.exe`** (или `SPIZDILI_VPN_v1.2.4_Windows_x64.zip`).
 3. Запустите `SPIZDILI_VPN.exe` — всё готово к работе сразу со всеми серверами, автоподключением к скоростным узлам и AI-оптимизацией!
 
 ---
@@ -38,9 +38,9 @@
 ## 🐧 Установка на Linux (Ubuntu / Debian / Astra / Mint / Fedora / Arch)
 
 ### Способ 1: Установка готового DEB пакета (Рекомендуется)
-Скачайте **`spizdili-vpn_1.2.3_amd64.deb`** из [последнего релиза](https://github.com/newiziwavez33-hub/spizdili_vpn/releases/latest) и установите:
+Скачайте **`spizdili-vpn_1.2.4_amd64.deb`** из [последнего релиза](https://github.com/newiziwavez33-hub/spizdili_vpn/releases/latest) и установите:
 ```bash
-sudo dpkg -i spizdili-vpn_1.2.3_amd64.deb
+sudo dpkg -i spizdili-vpn_1.2.4_amd64.deb
 ```
 
 ### Способ 2: Установка из исходного кода
@@ -64,32 +64,33 @@ sudo ./install.sh
 
 ---
 
-## 🌟 Ключевые возможности версии v1.2.3
+## 🌟 Ключевые возможности версии v1.2.4
 
-### 🎨 1. Новый дизайн Studio Dashboard
+### 🛡️ 1. Улучшенная регистрация и активация Cloudflare WARP
+- **Умная регистрация аккаунта в РФ:** Регистрация персонального ключа WARP теперь автоматически использует многоуровневый маршрут — через активный локальный VPN-туннель (SOCKS5/HTTP `127.0.0.1:10808`), системный прокси и резервные прямые каналы. Это решает проблему блокировок `api.cloudflareclient.com` в России.
+- **Мгновенная активация и наглядная индикация:** При включении Cloudflare WARP на главном дашборде крупно и чётко выводится статус **«🛡️ Cloudflare WARP • АКТИВЕН»** с подробным описанием работы безлимитного гигабитного канала.
+- **Нативный WireGuard в пространстве пользователя (User-Space):** WireGuard запускается внутри `xray-core` без необходимости root-прав или sudo.
+- **Резервный Cloudflare CDN Fast-Edge:** Автоматический откат на VLESS over TLS Anycast при блокировке UDP провайдером.
+
+### 🎨 2. Новый дизайн Studio Dashboard
 - **Тёмная стеклянная тема Glassmorphism:** фоновая карта созвездий, полупрозрачные карточки и неоновые акценты.
 - **Интерактивная кнопка питания (Power Button):** большая круглая кнопка со статусом и световым градиентом (жёлтый — подключение, зелёный — активно, синий — ожидание).
 - **Плавающий док телеметрии:** отображение текущего внешнего IP, длительности сессии, пинга в реальном времени и скорости канала.
 
-### 🚀 2. Аппаратный круговой спидометр (Cairo Speedometer)
+### 🚀 3. Аппаратный круговой спидометр (Cairo Speedometer)
 - Круговой неоновый тахометр с диапазоном измерений от **0 до 200 Мбит/с** и плавным движением стрелки (60 FPS интерполяция).
 - Прямой замер фактической пропускной способности через CDN Cloudflare.
 - Карточки быстрой аналитики: пинг (мс), размер тестового пакета (MB), время отклика (сек).
 
-### ⚡ 3. Аудит и исключение нерабочих серверов
+### ⚡ 4. Аудит и исключение нерабочих серверов
 - Встроенная кнопка **«⚡ Проверить серверы (Исключить мёртвые)»**:
   - Параллельное TCP-тестирование всех серверов в базе (до 25 потоков с таймаутом 1.5с).
   - **Мгновенное удаление недоступных и заблокированных узлов** из списков выбора и базы данных приложения.
 
-### 🎬 4. Ускорение YouTube и Google Video (4K без буферизации)
+### 🎬 5. Ускорение YouTube и Google Video (4K без буферизации)
 - **Блокировка QUIC (UDP:443):** устраняет зависания при воспроизведении видео, принудительно и мгновенно переключая браузер на TCP HTTP/2 через скоростной зашифрованный туннель.
 - **Приоритетная маршрутизация:** прямое направление доменов `*.googlevideo.com`, `*.youtube.com`, `*.ytimg.com` через DoH DNS.
 - **Расширенный буфер:** размер сокета увеличен до 256 КБ для стабильного стриминга видео в 1080p60 и 4K.
-
-### 🛡️ 5. Персональный Cloudflare WARP & Fast-Edge CDN
-- Генерация персонального изолированного WireGuard профиля в 1 клик.
-- Нативная работа WireGuard внутри процесса `xray-core` в пользовательском пространстве (**без необходимости root-прав и без ошибок доступа к `/etc/wireguard`**).
-- Резервный профиль **Cloudflare CDN Fast-Edge** (VLESS over TLS 443 Anycast) для устойчивости при блокировках UDP.
 
 ### 🤖 6. Оптимизация для AI IDE и разработчиков
 - Полная стабильность для **Google Antigravity**, **Gemini**, **ChatGPT**, **Claude**, **GitHub Copilot**, **Cursor**, **OpenCode**.
@@ -124,11 +125,11 @@ sudo ./install.sh
 
 ### Сборка `.deb` пакета для Linux:
 ```bash
-dpkg-deb --root-owner-group -b package_dir spizdili-vpn_1.2.3_amd64.deb
+dpkg-deb --root-owner-group -b package_dir spizdili-vpn_1.2.4_amd64.deb
 ```
 
 ### Сборка standalone `.exe` для Windows (PyInstaller):
 ```bash
 python windows/build_exe.py
-# Создает dist/SPIZDILI_VPN.exe и dist/SPIZDILI_VPN_v1.2.3_Windows_x64.zip
+# Создает dist/SPIZDILI_VPN.exe и dist/SPIZDILI_VPN_v1.2.4_Windows_x64.zip
 ```

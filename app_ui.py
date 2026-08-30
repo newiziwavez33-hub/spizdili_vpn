@@ -43,7 +43,7 @@ except ImportError:
 try:
     from version import APP_VERSION
 except ImportError:
-    APP_VERSION = "1.2.3"
+    APP_VERSION = "1.2.4"
 
 __all__ = ["VPNApplication"]
 
@@ -758,7 +758,7 @@ class VPNApplication(Adw.Application):
         try:
             from version import APP_VERSION
         except Exception:
-            APP_VERSION = "1.2.3"
+            APP_VERSION = "1.2.4"
 
         about = Adw.AboutWindow(
             application_name="SPIZDILI_VPN",
@@ -793,7 +793,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.3)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.4)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -879,7 +879,7 @@ class MainWindow(Adw.ApplicationWindow):
         header_brand.append(app_title)
 
         ver_badge = Gtk.Label()
-        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.3</span>")
+        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.4</span>")
         ver_badge.add_css_class("badge-awg")
         header_brand.append(ver_badge)
         header.pack_start(header_brand)
@@ -966,7 +966,7 @@ class MainWindow(Adw.ApplicationWindow):
         bot_box.set_margin_bottom(10)
         bot_box.set_margin_start(6)
         v_lbl = Gtk.Label()
-        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.3 • Protected</span>")
+        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.4 • Protected</span>")
         v_lbl.set_halign(Gtk.Align.START)
         bot_box.append(v_lbl)
         self._sidebar.append(bot_box)
@@ -1631,7 +1631,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Interactive Search Entry for instant real-time filtering
         # ── Smart Features Banner (WARP / Harvest / Speed) ───────────────
-        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.3")
+        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.4")
 
         warp_row = Adw.ActionRow(title="🛡️ Личный Cloudflare WARP", subtitle="Бесплатный персональный гигабитный сервер без ограничений")
         self._btn_warp_create = Gtk.Button(label="Создать")
@@ -1978,40 +1978,55 @@ class MainWindow(Adw.ApplicationWindow):
     # ── Cloudflare WARP & Speedtest Handlers ──────────────────────────────
 
     def _on_create_personal_warp_clicked(self, _btn=None) -> None:
-        self._show_toast("Генерация бесплатного личного аккаунта Cloudflare WARP...", timeout=6)
+        self._show_toast("🛡️ Создание и активация личного Cloudflare WARP...", timeout=6)
         if hasattr(self, "_btn_warp_create"):
             self._btn_warp_create.set_sensitive(False)
             self._btn_warp_create.set_label("Создание...")
         if hasattr(self, "_dash_warp_btn"):
             self._dash_warp_btn.set_sensitive(False)
             self._dash_warp_btn.set_label("Создание...")
+        if hasattr(self, "_btn_warp_page_create"):
+            self._btn_warp_page_create.set_sensitive(False)
+            self._btn_warp_page_create.set_label("Создание...")
 
         def _task():
             try:
                 import warp_service
-                warp_srv = warp_service.generate_warp_profile()
+                warp_srv = warp_service.generate_warp_profile(socks_port=10808, http_port=10809)
                 if warp_srv:
                     import reality_fetcher
                     reality_fetcher.save_servers_to_system([warp_srv])
-                    GLib.idle_add(self._on_warp_created_done, True, "✓ Личный сервер Cloudflare WARP успешно создан и сохранён!")
+                    GLib.idle_add(self._on_warp_created_done, True, "✓ Личный Cloudflare WARP успешно создан и активирован!", warp_srv)
                 else:
-                    GLib.idle_add(self._on_warp_created_done, False, "Не удалось связаться с Cloudflare API")
+                    GLib.idle_add(self._on_warp_created_done, False, "Не удалось связаться с Cloudflare API", None)
             except Exception as exc:
-                GLib.idle_add(self._on_warp_created_done, False, str(exc))
+                GLib.idle_add(self._on_warp_created_done, False, str(exc), None)
 
         import threading as _th
         _th.Thread(target=_task, daemon=True).start()
 
-    def _on_warp_created_done(self, success: bool, msg: str) -> None:
+    def _on_warp_created_done(self, success: bool, msg: str, warp_srv: Optional[dict] = None) -> None:
         if hasattr(self, "_btn_warp_create"):
             self._btn_warp_create.set_sensitive(True)
             self._btn_warp_create.set_label("Создать")
         if hasattr(self, "_dash_warp_btn"):
             self._dash_warp_btn.set_sensitive(True)
             self._dash_warp_btn.set_label("🛡️ Личный WARP")
+        if hasattr(self, "_btn_warp_page_create"):
+            self._btn_warp_page_create.set_sensitive(True)
+            self._btn_warp_page_create.set_label("⚡ Создать личный WARP в 1 клик")
         if success:
             self._refresh_profiles()
-        self._show_toast(msg, timeout=5)
+            if warp_srv:
+                warp_name = warp_srv.get("name", "")
+                if hasattr(self, "_profile_names") and warp_name in self._profile_names:
+                    idx = self._profile_names.index(warp_name)
+                    if hasattr(self, "_profile_dropdown_row"):
+                        self._profile_dropdown_row.set_selected(idx)
+                    self.cfg.set_last_connected(warp_name)
+                    self._navigate_to("connection")
+                    self._do_connect(warp_name)
+        self._show_toast(msg, timeout=6)
 
     def _on_run_speedtest_clicked(self, _btn=None) -> None:
         self._show_toast("Замер скорости загрузки через туннель...", timeout=6)
@@ -3092,13 +3107,18 @@ class MainWindow(Adw.ApplicationWindow):
     def _update_connection_ui(self) -> None:
         """Update all UI elements to reflect current connection state with glowing circular button."""
         display_title = get_server_display_title(self._active_profile or self.cfg.get_last_connected() or "")
+        is_warp = "warp" in (self._active_profile or "").lower() or "cloudflare" in (self._active_profile or "").lower()
         if self._connected:
             if hasattr(self, "_turn_on_btn"):
                 self._turn_on_btn.remove_css_class("connecting")
                 self._turn_on_btn.add_css_class("connected")
                 self._turn_on_lbl.set_text("TURN OFF")
-            self._status_label.set_markup("<span size='20000' weight='heavy' color='#38ef7d'>Connected • Protected</span>")
-            self._status_subtitle.set_markup(f"<span size='11500' color='#a5b4fc'>Secured: {display_title}</span>")
+            if is_warp:
+                self._status_label.set_markup("<span size='20000' weight='heavy' color='#38ef7d'>🛡️ Cloudflare WARP • АКТИВЕН</span>")
+                self._status_subtitle.set_markup("<span size='11500' weight='bold' color='#38bdf8'>✓ Безлимитный гигабитный туннель Cloudflare WARP активен</span>")
+            else:
+                self._status_label.set_markup("<span size='20000' weight='heavy' color='#38ef7d'>Connected • Protected</span>")
+                self._status_subtitle.set_markup(f"<span size='11500' color='#a5b4fc'>Secured: {display_title}</span>")
             if hasattr(self, "_footer_dock"):
                 self._footer_dock.set_visible(True)
         elif self._connecting:

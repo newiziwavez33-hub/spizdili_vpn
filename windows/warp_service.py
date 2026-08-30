@@ -58,38 +58,87 @@ def _x25519(k, u=9):
     return (x_2 * pow(z_2, P - 2, P)) % P
 
 
-def generate_warp_profile() -> Optional[Dict[str, Any]]:
-    """Register a free personal Cloudflare WARP WireGuard account."""
+def generate_warp_profile(socks_port: Optional[int] = None, http_port: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Register a free personal Cloudflare WARP WireGuard account.
+    
+    Supports registering directly or through an active local proxy/VPN tunnel
+    (essential in regions where api.cloudflareclient.com is throttled or blocked).
+    """
+    priv_bytes = os.urandom(32)
+    pub_int = _x25519(priv_bytes)
+    pub_bytes = pub_int.to_bytes(32, "little")
+    
+    priv_b64 = base64.b64encode(priv_bytes).decode("utf-8")
+    pub_b64 = base64.b64encode(pub_bytes).decode("utf-8")
+
+    url = "https://api.cloudflareclient.com/v0a2158/reg"
+    body = json.dumps({
+        "install_id": "",
+        "tos": datetime.datetime.now(datetime.timezone.utc).isoformat()[:19] + "+00:00",
+        "key": pub_b64,
+        "fcm_token": "",
+        "type": "Android",
+        "locale": "en_US"
+    }).encode("utf-8")
+
+    headers = {
+        "User-Agent": "okhttp/3.12.1",
+        "Content-Type": "application/json; charset=UTF-8"
+    }
+
+    # Attempt registration via multiple connection strategies:
+    # 1. Active local SOCKS5/HTTP proxy (if VPN is active)
+    # 2. Standard system environment / direct connection
+    handlers_to_try = []
+
+    # Priority 1: Check known local proxy ports if active
+    for port in [socks_port, 10808, 10809, http_port, 1080]:
+        if port:
+            try:
+                if port in (10808, socks_port, 1080):
+                    proxy_handler = urllib.request.ProxyHandler({
+                        "https": f"socks5h://127.0.0.1:{port}",
+                        "http": f"socks5h://127.0.0.1:{port}",
+                    })
+                    handlers_to_try.append(proxy_handler)
+                else:
+                    proxy_handler = urllib.request.ProxyHandler({
+                        "https": f"http://127.0.0.1:{port}",
+                        "http": f"http://127.0.0.1:{port}",
+                    })
+                    handlers_to_try.append(proxy_handler)
+            except Exception:
+                pass
+
+    # Priority 2: Direct connection / standard system resolver
+    handlers_to_try.append(urllib.request.ProxyHandler({}))
+
+    data = None
+    last_err = None
+
+    for h in handlers_to_try:
+        try:
+            opener = urllib.request.build_opener(h)
+            req = urllib.request.Request(url, data=body, headers=headers)
+            with opener.open(req, timeout=4) as resp:
+                if resp.status in (200, 201):
+                    raw = resp.read().decode("utf-8")
+                    data = json.loads(raw)
+                    if data.get("config"):
+                        break
+        except Exception as e:
+            last_err = e
+            continue
+
+    if not data or not data.get("config"):
+        logger.warning("Cloudflare WARP registration via API failed (%s). Providing pre-verified fast Cloudflare Fast-Edge profile.", last_err)
+        return get_cloudflare_edge_profile()
+
     try:
-        priv_bytes = os.urandom(32)
-        pub_int = _x25519(priv_bytes)
-        pub_bytes = pub_int.to_bytes(32, "little")
-        
-        priv_b64 = base64.b64encode(priv_bytes).decode("utf-8")
-        pub_b64 = base64.b64encode(pub_bytes).decode("utf-8")
-
-        url = "https://api.cloudflareclient.com/v0a2158/reg"
-        body = json.dumps({
-            "install_id": "",
-            "tos": datetime.datetime.now(datetime.timezone.utc).isoformat()[:19] + "+00:00",
-            "key": pub_b64,
-            "fcm_token": "",
-            "type": "Android",
-            "locale": "en_US"
-        }).encode("utf-8")
-
-        req = urllib.request.Request(url, data=body, headers={
-            "User-Agent": "okhttp/3.12.1",
-            "Content-Type": "application/json; charset=UTF-8"
-        })
-
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            
         cfg = data.get("config", {})
         peers = cfg.get("peers", [])
         if not peers:
-            return None
+            return get_cloudflare_edge_profile()
 
         endpoint = peers[0].get("endpoint", {}).get("host", "162.159.193.1:2408")
         peer_pub = peers[0].get("public_key", "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=")
@@ -103,12 +152,12 @@ def generate_warp_profile() -> Optional[Dict[str, Any]]:
 
         server_entry = {
             "id": f"warp_{int(datetime.datetime.now().timestamp())}",
-            "name": "⚡ Личный Cloudflare WARP (Неограниченный)",
+            "name": "🛡️ Личный Cloudflare WARP (Активен • WireGuard)",
             "ascii_name": "Cloudflare-WARP",
             "protocol": "wireguard",
             "address": host,
             "port": int(port),
-            "country": "США / CDN",
+            "country": "Cloudflare WARP",
             "flag": "🛡️",
             "city": "Cloudflare Global Edge",
             "secret_key": priv_b64,
@@ -135,7 +184,7 @@ def generate_warp_profile() -> Optional[Dict[str, Any]]:
         logger.info("Successfully registered free Cloudflare WARP account!")
         return server_entry
     except Exception as exc:
-        logger.warning("Cloudflare WARP API error: %s. Providing pre-verified Cloudflare CDN Edge profile.", exc)
+        logger.warning("Error parsing Cloudflare WARP response: %s", exc)
         return get_cloudflare_edge_profile()
 
 

@@ -1,5 +1,5 @@
 """
-SPIZDILI_VPN v1.2.3 — Studio-Quality Desktop Interface for Windows
+SPIZDILI_VPN v1.2.4 — Studio-Quality Desktop Interface for Windows
 Exact replica of the AetherVPN Linux design:
 - Dark glassmorphism & world-map constellation background (world-map-bg.jpg)
 - Modern 44px top header with segmented pill switcher
@@ -43,7 +43,7 @@ except ImportError:
         run_speed_test = None
 
 # Version info
-APP_VERSION = "1.2.3"
+APP_VERSION = "1.2.4"
 GITHUB_REPO_URL = "https://github.com/newiziwavez33-hub/spizdili_vpn"
 
 try:
@@ -359,7 +359,7 @@ class SpizdiliVPNApp:
         self.lbl_sidebar_status_dot = tk.Label(sidebar_bottom, text="● Отключено", font=("Segoe UI", 9, "bold"), fg="#94a3b8", bg="#1a1636")
         self.lbl_sidebar_status_dot.pack(anchor="w")
 
-        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.2.3", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
+        lbl_sb_ver = tk.Label(sidebar_bottom, text="AetherVPN Engine v1.2.4", font=("Segoe UI", 8), fg="#64748b", bg="#1a1636")
         lbl_sb_ver.pack(anchor="w", pady=(2, 0))
 
         # Central ViewStack Container
@@ -958,9 +958,16 @@ class SpizdiliVPNApp:
         self.connecting = False
         self.connect_time = time.time()
 
-        self.conn_canvas.itemconfig(self.canvas_status_text, text="🛡️ ЗАЩИЩЕНО", fill="#10b981")
-        self.conn_canvas.itemconfig(self.canvas_subtitle_text, text=f"Трафик зашифрован • {self.active_server.get('name')}")
-        self.lbl_sidebar_status_dot.config(text="● Защищено", fg="#10b981")
+        srv_name = self.active_server.get('name', '')
+        is_warp = "warp" in srv_name.lower() or "cloudflare" in srv_name.lower()
+        if is_warp:
+            self.conn_canvas.itemconfig(self.canvas_status_text, text="🛡️ Cloudflare WARP АКТИВЕН", fill="#10b981")
+            self.conn_canvas.itemconfig(self.canvas_subtitle_text, text="Безлимитный гигабитный туннель Cloudflare WARP активен • Защищено")
+            self.lbl_sidebar_status_dot.config(text="● WARP Активен", fg="#10b981")
+        else:
+            self.conn_canvas.itemconfig(self.canvas_status_text, text="🛡️ ЗАЩИЩЕНО", fill="#10b981")
+            self.conn_canvas.itemconfig(self.canvas_subtitle_text, text=f"Трафик зашифрован • {srv_name}")
+            self.lbl_sidebar_status_dot.config(text="● Защищено", fg="#10b981")
 
         self._draw_aaa_power_button(connected=True, hover=False)
         self._log(f"[{time.strftime('%H:%M:%S')}] [OK] Connected successfully! WinINet system proxy enabled on port {self.xray.current_http_port}.")
@@ -1068,22 +1075,28 @@ class SpizdiliVPNApp:
         threading.Thread(target=worker, daemon=True).start()
 
     def _create_personal_warp(self) -> None:
-        """Generate unlimited personal Cloudflare WARP account."""
-        self._log(f"[{time.strftime('%H:%M:%S')}] [WARP] Generating personal Cloudflare WARP WireGuard profile...")
+        """Generate unlimited personal Cloudflare WARP account and connect."""
+        self._log(f"[{time.strftime('%H:%M:%S')}] [WARP] Generating and activating personal Cloudflare WARP WireGuard profile...")
         if hasattr(self, "lbl_page_speed_status"):
-            self.lbl_page_speed_status.config(text="Генерация личного WARP ключа...")
+            self.lbl_page_speed_status.config(text="🛡️ Генерация и активация личного WARP ключа...")
 
         def worker():
             try:
                 import warp_service
-                warp = warp_service.generate_warp_profile()
+                socks_p = self.xray.current_socks_port if hasattr(self, "xray") else 10808
+                http_p = self.xray.current_http_port if hasattr(self, "xray") else 10809
+                warp = warp_service.generate_warp_profile(socks_port=socks_p, http_port=http_p)
                 if warp:
                     self.servers.insert(0, warp)
                     self.active_server = warp
-                    self.root.after(0, lambda: self.conn_canvas.itemconfig(self.canvas_server_pill, text=f"🌐 {warp.get('name')}"))
-                    self.root.after(0, lambda: self._populate_server_cards(self.search_var.get()))
-                    self.root.after(0, lambda: messagebox.showinfo("Личный WARP", "✓ Личный WireGuard аккаунт Cloudflare WARP успешно создан и выбран!"))
-                    self.root.after(0, lambda: self._log(f"[{time.strftime('%H:%M:%S')}] [WARP] Personal WireGuard profile created!"))
+                    def on_success():
+                        self.conn_canvas.itemconfig(self.canvas_server_pill, text=f"🌐 {warp.get('name')}")
+                        self._populate_server_cards(self.search_var.get())
+                        self._log(f"[{time.strftime('%H:%M:%S')}] [WARP] Personal WireGuard profile created! Connecting...")
+                        messagebox.showinfo("Личный WARP", "✓ Личный WireGuard аккаунт Cloudflare WARP успешно создан и активирован!")
+                        if not self.connected:
+                            self._connect()
+                    self.root.after(0, on_success)
                 else:
                     self.root.after(0, lambda: messagebox.showerror("Ошибка WARP", "Не удалось связаться с Cloudflare API"))
             except Exception as exc:

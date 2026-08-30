@@ -43,7 +43,7 @@ except ImportError:
         run_speed_test = None
 
 # Version info
-APP_VERSION = "1.2.7"
+APP_VERSION = "1.2.8"
 GITHUB_REPO_URL = "https://github.com/newiziwavez33-hub/spizdili_vpn"
 
 try:

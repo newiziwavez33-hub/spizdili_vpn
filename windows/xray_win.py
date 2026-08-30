@@ -56,7 +56,7 @@ class WindowsXrayManager:
             self.base_dir / "xray.exe",
             Path(sys.executable).parent / "xray.exe",
             Path(sys.executable).parent / "bin" / "xray.exe",
-            Path(os.environ.get("ProgramFiles", "C:\Program Files")) / "Xray" / "xray.exe",
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Xray" / "xray.exe",
         ]
         for c in candidates:
             if c.is_file():

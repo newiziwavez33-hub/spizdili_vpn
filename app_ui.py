@@ -43,7 +43,7 @@ except ImportError:
 try:
     from version import APP_VERSION
 except ImportError:
-    APP_VERSION = "1.2.2"
+    APP_VERSION = "1.2.3"
 
 __all__ = ["VPNApplication"]
 
@@ -452,11 +452,16 @@ class VPNApplication(Adw.Application):
             "quit": self._on_quit,
             "about": self._on_about,
             "connect-last": self._on_connect_last,
+            "minimize_tray": self._on_minimize_tray,
         }
         for name, callback in actions.items():
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", callback)
             self.add_action(action)
+
+    def _on_minimize_tray(self, action: Gio.SimpleAction, param: Any) -> None:
+        if self._window:
+            self._window._minimize_to_tray()
 
     def _setup_css(self) -> None:
         css = """
@@ -753,7 +758,7 @@ class VPNApplication(Adw.Application):
         try:
             from version import APP_VERSION
         except Exception:
-            APP_VERSION = "1.2.2"
+            APP_VERSION = "1.2.3"
 
         about = Adw.AboutWindow(
             application_name="SPIZDILI_VPN",
@@ -788,7 +793,7 @@ class MainWindow(Adw.ApplicationWindow):
     """Primary application window with three tabs."""
 
     def __init__(self, application: VPNApplication, vpn_manager: VPNManager) -> None:
-        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.2)")
+        super().__init__(application=application, title="SPIZDILI_VPN (v 1.2.3)")
         self.app: VPNApplication = application
         self.vpn: VPNManager = vpn_manager
         self.cfg: ConfigManager = vpn_manager.config_manager
@@ -874,7 +879,7 @@ class MainWindow(Adw.ApplicationWindow):
         header_brand.append(app_title)
 
         ver_badge = Gtk.Label()
-        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.2</span>")
+        ver_badge.set_markup("<span size='8500' weight='bold' color='#818cf8'>1.2.3</span>")
         ver_badge.add_css_class("badge-awg")
         header_brand.append(ver_badge)
         header.pack_start(header_brand)
@@ -961,7 +966,7 @@ class MainWindow(Adw.ApplicationWindow):
         bot_box.set_margin_bottom(10)
         bot_box.set_margin_start(6)
         v_lbl = Gtk.Label()
-        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.2 • Protected</span>")
+        v_lbl.set_markup("<span size='10000' color='#64748b'>v1.2.3 • Protected</span>")
         v_lbl.set_halign(Gtk.Align.START)
         bot_box.append(v_lbl)
         self._sidebar.append(bot_box)
@@ -1626,7 +1631,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Interactive Search Entry for instant real-time filtering
         # ── Smart Features Banner (WARP / Harvest / Speed) ───────────────
-        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.2")
+        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.3")
 
         warp_row = Adw.ActionRow(title="🛡️ Личный Cloudflare WARP", subtitle="Бесплатный персональный гигабитный сервер без ограничений")
         self._btn_warp_create = Gtk.Button(label="Создать")
@@ -3557,26 +3562,6 @@ class SubscriptionImportDialog(Adw.Window):
         fetch_box.append(load_incy_btn)
 
         self._spinner = Gtk.Spinner()
-        self._spinner.set_size_request(24, 24)
-        self._spinner.set_visible(False)
-        fetch_box.append(self._spinner)
-        content.append(fetch_box)
-
-    def _on_load_incy_clicked(self, button: Gtk.Button) -> None:
-        from incy_importer import IncyImporter
-        servers = IncyImporter.to_parsed_servers()
-        if not servers:
-            dialog = Adw.MessageDialog(
-                transient_for=self,
-                heading="Incy Database Not Found",
-                body="Could not find or read servers from ~/.local/share/incy/incy.db",
-            )
-            dialog.add_response("ok", "OK")
-            dialog.present()
-            return
-        self._servers = servers
-        self._rebuild_server_list()
-
         # Servers group (hidden until servers parsed)
         self._servers_group = Adw.PreferencesGroup(title="Available Servers")
         self._servers_group.set_visible(False)
@@ -3607,6 +3592,21 @@ class SubscriptionImportDialog(Adw.Window):
         self._servers_listbox.add_css_class("boxed-list")
         self._servers_group.add(self._servers_listbox)
         content.append(self._servers_group)
+
+    def _on_load_incy_clicked(self, button: Gtk.Button) -> None:
+        from incy_importer import IncyImporter
+        servers = IncyImporter.to_parsed_servers()
+        if not servers:
+            dialog = Adw.MessageDialog(
+                transient_for=self,
+                heading="Incy Database Not Found",
+                body="Could not find or read servers from ~/.local/share/incy/incy.db",
+            )
+            dialog.add_response("ok", "OK")
+            dialog.present()
+            return
+        self._servers = servers
+        self._rebuild_server_list()
 
     def _on_fetch_clicked(self, button: Gtk.Button) -> None:
         text = self._url_entry.get_text().strip()

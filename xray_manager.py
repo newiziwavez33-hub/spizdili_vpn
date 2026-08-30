@@ -489,24 +489,26 @@ class XrayManager:
             self.disconnect()
             return False, f"Xray did not open proxy inbound ports ({SOCKS_PORT}/{HTTP_PORT})"
 
-        # Enable system proxy in GNOME / Ubuntu Desktop & environment
+        # 1. Enable system proxy in GNOME / Ubuntu Desktop & environment
         self._enable_system_proxy()
 
-        # Enable kernel-level default routing & DNS for tun_wavez
+        # 2. Enable kernel-level TUN interface & default routing for 100% transparent traffic (AI IDEs, Cursor, CLI, Daemons)
+        self._enable_tun_mode()
         self._enable_kernel_routing()
 
         self._connected = True
         self._active_profile = profile_name
         self._active_server_data = s_data
         self._start_time = time.time()
-        logger.info("Successfully connected to '%s' via Xray Reality", profile_name)
+        logger.info("Successfully connected to '%s' via Xray Reality (Transparent TUN + System Proxy)", profile_name)
         return True, f"Connected to {profile_name}"
 
     def disconnect(self) -> tuple[bool, str]:
         """Stop Xray process, reset system proxy, and ensure ports are fully freed."""
         logger.info("Disconnecting Xray backend...")
 
-        # 1. Reset kernel routing & system proxy
+        # 1. Reset kernel TUN & system proxy
+        self._disable_tun_mode()
         self._disable_kernel_routing()
         self._disable_system_proxy()
 

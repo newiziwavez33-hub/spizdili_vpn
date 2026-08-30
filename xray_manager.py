@@ -336,17 +336,17 @@ class XrayManager:
         ]
         cfg["inbounds"] = inbounds
 
-        # High-stability policy for Google AI / Antigravity streaming & long-lived connections
+        # Ultra-low-latency & zero-drop policy for AI Streaming (Antigravity, Gemini, ChatGPT, Claude SSE streams)
         cfg["policy"] = {
             "levels": {
                 "0": {
-                    "handshake": 10,
-                    "connIdle": 900,
-                    "uplinkOnly": 15,
-                    "downlinkOnly": 30,
+                    "handshake": 8,
+                    "connIdle": 1800,       # 30 mins idle keepalive for long AI generation turns
+                    "uplinkOnly": 0,        # No premature timeout for streaming upload
+                    "downlinkOnly": 0,      # No timeout for long token streaming
                     "statsUserUplink": True,
                     "statsUserDownlink": True,
-                    "bufferSize": 262144
+                    "bufferSize": 524288    # 512KB fast chunk buffer for AI token streams
                 }
             },
             "system": {
@@ -355,27 +355,46 @@ class XrayManager:
             }
         }
 
-        # DNS configuration: DoH + Google DNS with strict IPv4 and AI IDE priority routing
+        # Dedicated high-speed DNS with strict DoH routing for AI & Developer endpoints
+        ai_domains = [
+            # Google & Gemini & Antigravity
+            "domain:gemini.google.com", "domain:generativelanguage.googleapis.com",
+            "domain:alkalimakersuite-pa.clients6.google.com", "domain:aistudio.google.com",
+            "domain:deepmind.google", "domain:ai.google.dev", "domain:cloud.google.com",
+            "domain:googleapis.com", "domain:gstatic.com", "domain:googleusercontent.com",
+            "domain:google.com", "domain:googlevideo.com", "domain:youtube.com", "domain:ytimg.com",
+            
+            # OpenAI / ChatGPT
+            "domain:openai.com", "domain:chatgpt.com", "domain:oaistatic.com", "domain:oaiusercontent.com",
+            "domain:api.openai.com", "domain:cdn.oaistatic.com",
+            
+            # Anthropic / Claude
+            "domain:anthropic.com", "domain:claude.ai", "domain:api.anthropic.com",
+            
+            # GitHub Copilot & Developer Ecosystem
+            "domain:github.com", "domain:githubusercontent.com", "domain:githubcopilot.com",
+            "domain:api.github.com", "domain:cursor.com", "domain:cursor.sh",
+            
+            # OpenRouter, HuggingFace, Groq, Perplexity, Midjourney
+            "domain:openrouter.ai", "domain:huggingface.co", "domain:groq.com",
+            "domain:perplexity.ai", "domain:midjourney.com", "domain:replicate.com",
+            "domain:mistral.ai", "domain:cohere.com", "domain:together.ai"
+        ]
+
         cfg["dns"] = {
             "servers": [
                 {
                     "address": "https://1.1.1.1/dns-query",
-                    "domains": [
-                        "domain:openai.com", "domain:chatgpt.com", "domain:oaistatic.com", "domain:oaiusercontent.com",
-                        "domain:anthropic.com", "domain:claude.ai",
-                        "domain:googleapis.com", "domain:google.com", "domain:gstatic.com", "domain:googlevideo.com",
-                        "domain:github.com", "domain:githubusercontent.com",
-                        "domain:opencode.ai", "domain:huggingface.co", "domain:openrouter.ai"
-                    ]
+                    "domains": ai_domains
                 },
                 "https://8.8.8.8/dns-query",
-                "8.8.8.8",
-                "1.1.1.1"
+                "1.1.1.1",
+                "8.8.8.8"
             ],
             "queryStrategy": "UseIPv4"
         }
 
-        # Clean routing rules with YouTube & Google Video 4K Acceleration
+        # Clean routing rules: AI & Media priority proxying
         cfg["routing"] = {
             "domainStrategy": "IPIfNonMatch",
             "rules": [
@@ -388,23 +407,20 @@ class XrayManager:
                     ],
                     "outboundTag": "direct"
                 },
-                # Block UDP:443 (QUIC) so YouTube immediately uses lightning-fast TCP HTTP/2 without buffering
+                # Block UDP:443 (QUIC) so YouTube and WebSockets automatically use high-speed stable TCP streams
                 {
                     "type": "field",
                     "port": "443",
                     "network": "udp",
                     "outboundTag": "block"
                 },
-                # Prioritize YouTube & Google Video domains to proxy
+                # AI priority routing
                 {
                     "type": "field",
-                    "domain": [
-                        "domain:youtube.com", "domain:googlevideo.com", "domain:ytimg.com",
-                        "domain:ggpht.com", "domain:gvt1.com", "domain:youtube-nocookie.com",
-                        "domain:youtu.be", "domain:yt.be", "domain:googleusercontent.com"
-                    ],
+                    "domain": ai_domains,
                     "outboundTag": "proxy"
                 },
+                # Fallback all other internet traffic to proxy
                 {
                     "type": "field",
                     "network": "tcp,udp",

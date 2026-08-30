@@ -3691,11 +3691,11 @@ class SubscriptionImportDialog(Adw.Window):
 
         # Header bar
         header = Adw.HeaderBar()
-        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn = Gtk.Button(label="Отмена")
         cancel_btn.connect("clicked", lambda _: self.close())
         header.pack_start(cancel_btn)
 
-        self._import_btn = Gtk.Button(label="Import Selected")
+        self._import_btn = Gtk.Button(label="Добавить выбранные")
         self._import_btn.add_css_class("suggested-action")
         self._import_btn.set_sensitive(False)
         self._import_btn.connect("clicked", self._on_import_selected)
@@ -3716,44 +3716,45 @@ class SubscriptionImportDialog(Adw.Window):
 
         # Input group
         input_group = Adw.PreferencesGroup(
-            title="Subscription Link or Config",
-            description="Paste happ://, incy://, https:// subscription URL, awg://, wireguard://, or base64 config",
+            title="Ключ или ссылка подписки",
+            description="Вставьте ссылку https:// (TgFlow, Marzban, Happ), vless://, wireguard://, awg:// или base64",
         )
-        self._url_entry = Adw.EntryRow(title="Link or URL")
+        self._url_entry = Adw.EntryRow(title="Ключ / Ссылка")
         sub_url = self._settings.get("subscription_url", "")
         if sub_url:
             self._url_entry.set_text(sub_url)
+        self._url_entry.connect("entry-activated", lambda _: self._on_fetch_clicked(self._fetch_btn))
         input_group.add(self._url_entry)
         content.append(input_group)
 
-        # Fetch button & Incy load button & spinner
+        # Fetch button & spinner box
         fetch_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.CENTER)
-        self._fetch_btn = Gtk.Button(label="Fetch & Parse Servers")
+        fetch_box.set_margin_top(4)
+        fetch_box.set_margin_bottom(8)
+
+        self._fetch_btn = Gtk.Button(label="⚡ Активировать и получить серверы")
         self._fetch_btn.add_css_class("suggested-action")
         self._fetch_btn.add_css_class("pill")
         self._fetch_btn.connect("clicked", self._on_fetch_clicked)
         fetch_box.append(self._fetch_btn)
 
-        load_incy_btn = Gtk.Button(label="📥 Load Incy Servers")
-        load_incy_btn.add_css_class("flat")
-        load_incy_btn.add_css_class("pill")
-        load_incy_btn.set_tooltip_text("Load all 37 servers from Incy database")
-        load_incy_btn.connect("clicked", self._on_load_incy_clicked)
-        fetch_box.append(load_incy_btn)
-
         self._spinner = Gtk.Spinner()
+        fetch_box.append(self._spinner)
+
+        content.append(fetch_box)
+
         # Servers group (hidden until servers parsed)
-        self._servers_group = Adw.PreferencesGroup(title="Available Servers")
+        self._servers_group = Adw.PreferencesGroup(title="Доступные серверы")
         self._servers_group.set_visible(False)
 
         # Actions row above list (Select All / Deselect All / Test Latency)
         actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        sel_all_btn = Gtk.Button(label="Select All")
+        sel_all_btn = Gtk.Button(label="Выбрать все")
         sel_all_btn.add_css_class("flat")
         sel_all_btn.connect("clicked", lambda _: self._set_all_selected(True))
         actions_box.append(sel_all_btn)
 
-        desel_all_btn = Gtk.Button(label="Deselect All")
+        desel_all_btn = Gtk.Button(label="Снять выбор")
         desel_all_btn.add_css_class("flat")
         desel_all_btn.connect("clicked", lambda _: self._set_all_selected(False))
         actions_box.append(desel_all_btn)
@@ -3761,7 +3762,7 @@ class SubscriptionImportDialog(Adw.Window):
         spacer = Gtk.Box(hexpand=True)
         actions_box.append(spacer)
 
-        self._test_lat_btn = Gtk.Button(label="⚡ Test Latencies")
+        self._test_lat_btn = Gtk.Button(label="⚡ Замерить пинг")
         self._test_lat_btn.add_css_class("flat")
         self._test_lat_btn.connect("clicked", self._on_test_latencies_clicked)
         actions_box.append(self._test_lat_btn)
@@ -3934,7 +3935,7 @@ class SubscriptionImportDialog(Adw.Window):
     def _update_import_btn_state(self) -> None:
         count = sum(1 for s in self._servers if s.selected)
         self._import_btn.set_sensitive(count > 0)
-        self._import_btn.set_label(f"Import Selected ({count})" if count > 0 else "Import Selected")
+        self._import_btn.set_label(f"Добавить выбранные ({count})" if count > 0 else "Добавить выбранные")
 
     def _on_test_latencies_clicked(self, button: Gtk.Button) -> None:
         button.set_sensitive(False)

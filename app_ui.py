@@ -3773,8 +3773,9 @@ class SubscriptionImportDialog(Adw.Window):
 
         # Scrollable content
         scroll = Gtk.ScrolledWindow(vexpand=True)
-        clamp = Adw.Clamp(maximum_size=500)
+        clamp = Adw.Clamp(maximum_size=540)
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        self._content_box = content
         content.set_margin_top(16)
         content.set_margin_bottom(16)
         content.set_margin_start(16)
@@ -3798,6 +3799,7 @@ class SubscriptionImportDialog(Adw.Window):
 
         # Fetch button & spinner box
         fetch_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.CENTER)
+        self._fetch_box = fetch_box
         fetch_box.set_margin_top(4)
         fetch_box.set_margin_bottom(8)
 
@@ -3918,41 +3920,108 @@ class SubscriptionImportDialog(Adw.Window):
                 sub_info = s.metadata["subscription_info"]
                 break
 
-        if sub_info:
-            expire_ts = sub_info.get("expire")
-            upload_b = sub_info.get("upload", 0)
-            download_b = sub_info.get("download", 0)
-            total_b = sub_info.get("total", 0)
+        # Dynamic Subscription Status Card
+        if not hasattr(self, "_sub_card_group"):
+            self._sub_card_group = Adw.PreferencesGroup(title="📋 Информация о подписке")
+            self._content_box.insert_child_after(self._sub_card_group, self._fetch_box)
 
-            details = []
-            if expire_ts:
-                try:
-                    import datetime
-                    exp_dt = datetime.datetime.fromtimestamp(int(expire_ts))
-                    now_dt = datetime.datetime.now()
-                    diff = exp_dt - now_dt
-                    days_left = diff.days
-                    if days_left > 0:
-                        time_str = f"{days_left} дн. ({exp_dt.strftime('%d.%m.%Y')})"
-                    elif diff.total_seconds() > 0:
-                        time_str = f"Менее суток ({exp_dt.strftime('%d.%m.%Y %H:%M')})"
-                    else:
-                        time_str = f"Истекла ({exp_dt.strftime('%d.%m.%Y')})"
-                    details.append(f"⏳ Срок действия: <b>{time_str}</b>")
-                except Exception:
-                    pass
+        # Clear previous sub card contents
+        if hasattr(self, "_sub_card_box"):
+            self._sub_card_group.remove(self._sub_card_box)
 
-            if total_b and isinstance(total_b, int):
-                used_gb = (upload_b + download_b) / (1024**3)
-                tot_gb = total_b / (1024**3)
-                details.append(f"📊 Трафик: <b>{used_gb:.1f} GB</b> / <b>{tot_gb:.1f} GB</b>")
+        self._sub_card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self._sub_card_box.add_css_class("card")
+        self._sub_card_box.set_margin_bottom(6)
 
-            if details:
-                self._servers_group.set_description(" • ".join(details))
-            else:
-                self._servers_group.set_description(f"Успешно загружено {len(servers)} серверов")
-        else:
-            self._servers_group.set_description(f"Успешно загружено {len(servers)} серверов")
+        # Header row with title & status pill
+        h_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        title_lbl = Gtk.Label()
+        title_lbl.set_markup("<span size='13000' weight='heavy' color='#ffffff'>🔑 Активная подписка</span>")
+        title_lbl.set_halign(Gtk.Align.START)
+        h_row.append(title_lbl)
+
+        status_badge = Gtk.Label(label="● АКТИВНА")
+        status_badge.add_css_class("badge-wg")
+        status_badge.set_valign(Gtk.Align.CENTER)
+        status_badge.set_halign(Gtk.Align.END)
+        status_badge.set_hexpand(True)
+        h_row.append(status_badge)
+        self._sub_card_box.append(h_row)
+
+        # Stats details Grid (Traffic, Days Left, Servers Count)
+        stats_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14, halign=Gtk.Align.FILL)
+        stats_box.set_homogeneous(True)
+
+        # 1. Days remaining
+        time_str = "Бессрочно"
+        time_sub = "Срок действия"
+        if sub_info and sub_info.get("expire"):
+            try:
+                import datetime
+                exp_dt = datetime.datetime.fromtimestamp(int(sub_info["expire"]))
+                diff = exp_dt - datetime.datetime.now()
+                days_left = diff.days
+                if days_left > 0:
+                    time_str = f"{days_left} дн."
+                    time_sub = exp_dt.strftime("%d.%m.%Y")
+                elif diff.total_seconds() > 0:
+                    time_str = "< 1 дн."
+                    time_sub = "Сегодня"
+                else:
+                    time_str = "Истекла"
+                    time_sub = exp_dt.strftime("%d.%m.%Y")
+            except Exception:
+                pass
+
+        card_days = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        card_days.add_css_class("glass-card")
+        lbl_days_v = Gtk.Label()
+        lbl_days_v.set_markup(f"<span size='14000' weight='heavy' color='#38ef7d'>⏳ {time_str}</span>")
+        lbl_days_s = Gtk.Label()
+        lbl_days_s.set_markup(f"<span size='9500' color='#94a3b8'>{time_sub}</span>")
+        card_days.append(lbl_days_v)
+        card_days.append(lbl_days_s)
+        stats_box.append(card_days)
+
+        # 2. Traffic usage
+        traf_str = "Безлимит"
+        traf_sub = "Расход трафика"
+        if sub_info and sub_info.get("total"):
+            try:
+                tot_b = int(sub_info["total"])
+                up_b = int(sub_info.get("upload", 0))
+                down_b = int(sub_info.get("download", 0))
+                used_gb = (up_b + down_b) / (1024**3)
+                tot_gb = tot_b / (1024**3)
+                traf_str = f"{used_gb:.1f} / {tot_gb:.1f} GB"
+                traf_sub = f"Осталось {max(0, tot_gb - used_gb):.1f} GB"
+            except Exception:
+                pass
+
+        card_traf = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        card_traf.add_css_class("glass-card")
+        lbl_traf_v = Gtk.Label()
+        lbl_traf_v.set_markup(f"<span size='14000' weight='heavy' color='#38bdf8'>📊 {traf_str}</span>")
+        lbl_traf_s = Gtk.Label()
+        lbl_traf_s.set_markup(f"<span size='9500' color='#94a3b8'>{traf_sub}</span>")
+        card_traf.append(lbl_traf_v)
+        card_traf.append(lbl_traf_s)
+        stats_box.append(card_traf)
+
+        # 3. Servers count
+        card_srvs = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        card_srvs.add_css_class("glass-card")
+        lbl_srvs_v = Gtk.Label()
+        lbl_srvs_v.set_markup(f"<span size='14000' weight='heavy' color='#a855f7'>⚡ {len(servers)}</span>")
+        lbl_srvs_s = Gtk.Label()
+        lbl_srvs_s.set_markup("<span size='9500' color='#94a3b8'>Локаций доступно</span>")
+        card_srvs.append(lbl_srvs_v)
+        card_srvs.append(lbl_srvs_s)
+        stats_box.append(card_srvs)
+
+        self._sub_card_box.append(stats_box)
+        self._sub_card_group.add(self._sub_card_box)
+        self._sub_card_group.set_visible(True)
 
         self._servers = servers
         self._rebuild_server_list()
@@ -3970,7 +4039,9 @@ class SubscriptionImportDialog(Adw.Window):
         self._lat_labels.clear()
 
         for idx, srv in enumerate(self._servers):
-            row = Adw.ActionRow(title=srv.name, subtitle=srv.endpoint or "WireGuard Server")
+            disp_title = get_server_display_title(srv.name)
+            flag = get_server_flag(disp_title)
+            row = Adw.ActionRow(title=f"{flag} {disp_title}", subtitle=srv.endpoint or "VPN Server")
 
             # Checkbox
             check = Gtk.CheckButton(active=srv.selected)
@@ -3980,8 +4051,13 @@ class SubscriptionImportDialog(Adw.Window):
             self._check_buttons.append(check)
 
             # Protocol badge
-            badge = Gtk.Label(label="AWG" if srv.is_amnezia else "WG")
-            badge.add_css_class("badge-awg" if srv.is_amnezia else "badge-wg")
+            badge = Gtk.Label(label=srv.protocol or ("AWG" if srv.is_amnezia else "WG"))
+            if "vless" in (srv.protocol or "").lower() or "reality" in (srv.protocol or "").lower():
+                badge.add_css_class("badge-awg")
+            elif srv.is_amnezia:
+                badge.add_css_class("badge-awg")
+            else:
+                badge.add_css_class("badge-wg")
             badge.set_valign(Gtk.Align.CENTER)
             row.add_suffix(badge)
 

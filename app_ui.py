@@ -1122,7 +1122,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # IP
         self._footer_ip_lbl = Gtk.Label()
-        self._footer_ip_lbl.set_markup("<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#ffffff'>178.xx.xx.xx</span>")
+        self._footer_ip_lbl.set_markup("<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#38bdf8'>—</span>")
         self._footer_dock.append(self._footer_ip_lbl)
 
         # Duration
@@ -3328,6 +3328,8 @@ class MainWindow(Adw.ApplicationWindow):
                 self._turn_on_lbl.set_text("CONNECTING...")
             self._status_label.set_markup("<span size='20000' weight='heavy' color='#facc15'>Connecting…</span>")
             self._status_subtitle.set_markup("<span size='11500' color='#94a3b8'>Establishing encrypted tunnel…</span>")
+            if hasattr(self, "_footer_ip_lbl"):
+                self._footer_ip_lbl.set_markup("<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#facc15'>Подключение…</span>")
         else:
             if hasattr(self, "_turn_on_btn"):
                 self._turn_on_btn.remove_css_class("connected")
@@ -3337,6 +3339,10 @@ class MainWindow(Adw.ApplicationWindow):
             self._status_subtitle.set_markup(f"<span size='11500' color='#94a3b8'>Optimal Location: {display_title or 'Auto-Select (Optimal)'}</span>")
             if hasattr(self, "_footer_duration_lbl"):
                 self._footer_duration_lbl.set_markup("<span size='11000' color='#94a3b8'>Duration: </span><span size='11000' weight='bold' color='#64748b'>00:00:00</span>")
+            if hasattr(self, "_footer_ip_lbl"):
+                self._footer_ip_lbl.set_markup("<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#64748b'>—</span>")
+            if hasattr(self, "_footer_ping_lbl"):
+                self._footer_ping_lbl.set_markup("<span size='11000' color='#94a3b8'>Ping: </span><span size='11000' weight='bold' color='#64748b'>—</span>")
 
     # ---- Stats polling ----------------------------------------------------
 

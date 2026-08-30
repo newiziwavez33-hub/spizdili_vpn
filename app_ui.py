@@ -2686,6 +2686,16 @@ class MainWindow(Adw.ApplicationWindow):
     def _refresh_profiles(self) -> None:
         """Reload profiles from disk and update UI."""
         profiles = self.cfg.list_profiles()
+        if not profiles:
+            try:
+                import reality_fetcher
+                servers = reality_fetcher.load_cached_servers()
+                if servers:
+                    reality_fetcher.save_servers_to_system(servers)
+                    profiles = self.cfg.list_profiles()
+            except Exception as e:
+                logger.error("Auto-sync servers error: %s", e)
+
         self._profile_names = [p.name for p in profiles]
         display_names = [get_server_display_title(p.name) for p in profiles]
 

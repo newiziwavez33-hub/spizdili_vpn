@@ -3327,10 +3327,35 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_ip_received(self, ip: Optional[str]) -> bool:
         if self._connected:
-            clean_ip = ip or "Unknown"
-            self._ip_value.set_text(clean_ip)
-            if hasattr(self, "_footer_ip_lbl"):
-                self._footer_ip_lbl.set_markup(f"<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#ffffff'>{clean_ip}</span>")
+            if ip and ip != "Unknown" and re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip):
+                self._ip_value.set_text(ip)
+                if hasattr(self, "_footer_ip_lbl"):
+                    self._footer_ip_lbl.set_markup(f"<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#ffffff'>{ip}</span>")
+            else:
+                # Server failed to route live traffic (IP is Unknown) -> Purge it from list!
+                bad_profile = self._active_profile
+                logger.warning("Active server %s returned Unknown IP! Purging from server list...", bad_profile)
+                self._ip_value.set_text("Недоступен")
+                if hasattr(self, "_footer_ip_lbl"):
+                    self._footer_ip_lbl.set_markup("<span size='11000' color='#94a3b8'>Current IP: </span><span size='11000' weight='bold' color='#f87171'>Dead IP (Отсеян)</span>")
+                
+                # Exclude from cached servers
+                try:
+                    import reality_fetcher
+                    cur_srvs = reality_fetcher.load_cached_servers()
+                    filtered_srvs = [s for s in cur_srvs if s.get("name") != bad_profile and s.get("ascii_name") != bad_profile]
+                    reality_fetcher.save_servers_to_system(filtered_srvs)
+                    
+                    # Delete conf file
+                    from pathlib import Path
+                    prof_dir = Path.home() / ".config" / "wavez-vpn" / "profiles"
+                    if prof_dir.is_dir() and bad_profile:
+                        (prof_dir / f"{bad_profile}.conf").unlink(missing_ok=True)
+                    
+                    self._refresh_profiles()
+                    self._show_toast(f"⚠️ Сервер «{get_server_display_title(bad_profile or '')}» не отдаёт рабочий IP и был удалён из списка!", timeout=6)
+                except Exception as exc:
+                    logger.error("Error purging dead IP server: %s", exc)
         return False
 
     def _fetch_ping(self) -> None:

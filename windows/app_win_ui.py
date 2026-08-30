@@ -1027,7 +1027,7 @@ class SpizdiliVPNApp:
                 with opener.open(req, timeout=4) as resp:
                     ip_str = resp.read().decode("utf-8").strip()
             except Exception:
-                ip_str = self.active_server.get("address", "195.181.173.231")
+                ip_str = "Unknown"
 
             # 2. Measure ping
             t0 = time.time()
@@ -1040,9 +1040,19 @@ class SpizdiliVPNApp:
 
             def update_ui() -> None:
                 if self.connected:
-                    self.external_ip = ip_str
-                    self.ping_latency = ping_str
-                    self.lbl_metric_ip.config(text=ip_str)
+                    if ip_str and ip_str != "Unknown" and ip_str != "—":
+                        self.external_ip = ip_str
+                        self.ping_latency = ping_str
+                        self.lbl_metric_ip.config(text=ip_str)
+                        self.lbl_metric_ping.config(text=ping_str)
+                    else:
+                        # Dead server returning Unknown IP -> purge from list
+                        bad_srv = self.active_server
+                        self.servers = [s for s in self.servers if s.get("name") != bad_srv.get("name")]
+                        self.external_ip = "Отсеян"
+                        self.lbl_metric_ip.config(text="Unknown (Отсеян)", fg="#f87171")
+                        self._log(f"[{time.strftime('%H:%M:%S')}] [DEAD] Server {bad_srv.get('name')} returned Unknown IP! Purged from list.")
+                        self._render_server_cards()
                     self.lbl_metric_ping.config(text=ping_str)
 
             self.root.after(0, update_ui)

@@ -2384,31 +2384,32 @@ class MainWindow(Adw.ApplicationWindow):
             return
 
         # Modal startup audit window
-        dialog = Adw.Window(
+        dialog = Gtk.Window(
             title="Проверка доступности узлов",
-            default_width=440,
+            default_width=460,
             default_height=320,
             modal=True,
             transient_for=self,
+            resizable=False,
         )
         dialog.add_css_class("aether-window")
 
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-        main_box.set_margin_top(24)
-        main_box.set_margin_bottom(24)
-        main_box.set_margin_start(24)
-        main_box.set_margin_end(24)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        main_box.set_margin_top(28)
+        main_box.set_margin_bottom(28)
+        main_box.set_margin_start(28)
+        main_box.set_margin_end(28)
         main_box.set_valign(Gtk.Align.CENTER)
-        dialog.set_content(main_box)
+        dialog.set_child(main_box)
 
-        # Header with raccoon/radar icon
-        hdr_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.CENTER)
+        # Header with radar icon
+        hdr_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, halign=Gtk.Align.CENTER)
         lbl_icon = Gtk.Label()
-        lbl_icon.set_markup("<span size='20000'>📡</span>")
+        lbl_icon.set_markup("<span size='22000'>📡</span>")
         hdr_box.append(lbl_icon)
 
         lbl_t = Gtk.Label()
-        lbl_t.set_markup("<span size='14000' weight='heavy' color='#ffffff'>Аудит и отбор серверов</span>")
+        lbl_t.set_markup("<span size='15000' weight='heavy' color='#ffffff'>Аудит и отбор серверов</span>")
         hdr_box.append(lbl_t)
         main_box.append(hdr_box)
 
@@ -2420,12 +2421,12 @@ class MainWindow(Adw.ApplicationWindow):
         # Progress bar (Показометр)
         prog_bar = Gtk.ProgressBar()
         prog_bar.set_fraction(0.0)
-        prog_bar.set_size_request(380, 10)
+        prog_bar.set_size_request(390, 12)
         prog_bar.add_css_class("suggested-action")
         main_box.append(prog_bar)
 
         # Stats badges row
-        stats_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, halign=Gtk.Align.CENTER)
+        stats_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.CENTER)
 
         b_total = Gtk.Label()
         b_total.set_markup(f"<span size='9500' color='#94a3b8'>Всего: </span><span size='9500' weight='bold' color='#ffffff'>{len(servers)}</span>")
@@ -2476,7 +2477,7 @@ class MainWindow(Adw.ApplicationWindow):
                     pass
                 return (s, False, 99999.0)
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=15) as ex:
                 futures = {ex.submit(check_one, s): s for s in servers}
                 for f in concurrent.futures.as_completed(futures):
                     s, ok, lat = f.result()
@@ -2498,7 +2499,7 @@ class MainWindow(Adw.ApplicationWindow):
                         prog_bar.set_fraction(fr)
                         b_alive.set_markup(f"<span size='9500' color='#94a3b8'>Активно: </span><span size='9500' weight='bold' color='#34d399'>{n_al}</span>")
                         b_dead.set_markup(f"<span size='9500' color='#94a3b8'>Отсеяно: </span><span size='9500' weight='bold' color='#f87171'>{n_dd}</span>")
-                        lbl_current.set_markup(f"<span size='9500' color='#818cf8'>Проверено {cnt}/{total_n}: {last_s.get('name', '')[:28]}</span>")
+                        lbl_current.set_markup(f"<span size='9500' color='#818cf8'>Проверено {cnt}/{total_n}: {last_s.get('name', '')[:26]}</span>")
 
                     GLib.idle_add(update_ui)
 
@@ -2508,7 +2509,7 @@ class MainWindow(Adw.ApplicationWindow):
 
             def on_complete():
                 self._refresh_profiles()
-                time.sleep(0.3)
+                time.sleep(0.8)
                 dialog.close()
 
                 if best_srv and not self._connected:

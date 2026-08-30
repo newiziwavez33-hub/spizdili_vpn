@@ -416,3 +416,24 @@ def save_servers_to_system(servers: list[dict[str, Any]]) -> int:
         created_profiles += 1
 
     return created_profiles
+
+
+def load_cached_servers() -> list[dict[str, Any]]:
+    """Load cached servers from user config or system package fallback."""
+    candidates = [
+        USER_SERVERS_JSON,
+        Path.home() / ".config" / "wavez-vpn" / "user_servers.json",
+        Path("/usr/local/share/wavez-vpn/wavez_servers.json"),
+        Path("/usr/local/lib/wavez-vpn/wavez_servers.json"),
+        Path(__file__).parent / "wavez_servers.json",
+    ]
+    for c in candidates:
+        if c.is_file():
+            try:
+                data = json.loads(c.read_text(encoding="utf-8"))
+                srvs = data.get("servers", [])
+                if srvs:
+                    return srvs
+            except Exception:
+                pass
+    return []

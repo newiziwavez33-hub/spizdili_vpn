@@ -4008,20 +4008,39 @@ class SubscriptionImportDialog(Adw.Window):
         card_traf.append(lbl_traf_s)
         stats_box.append(card_traf)
 
-        # 3. Servers count
-        card_srvs = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        card_srvs.add_css_class("glass-card")
-        lbl_srvs_v = Gtk.Label()
-        lbl_srvs_v.set_markup(f"<span size='14000' weight='heavy' color='#a855f7'>⚡ {len(servers)}</span>")
-        lbl_srvs_s = Gtk.Label()
-        lbl_srvs_s.set_markup("<span size='9500' color='#94a3b8'>Локаций доступно</span>")
-        card_srvs.append(lbl_srvs_v)
-        card_srvs.append(lbl_srvs_s)
-        stats_box.append(card_srvs)
-
         self._sub_card_box.append(stats_box)
+
+        # Provider Announcement Banner (e.g. White lists, Telegram Bot, Support info)
+        if sub_info and sub_info.get("announce"):
+            ann_text = sub_info["announce"].strip()
+            if ann_text:
+                ann_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+                ann_card.add_css_class("glass-card")
+                ann_card.set_margin_top(4)
+
+                ann_lbl = Gtk.Label()
+                ann_lbl.set_wrap(True)
+                ann_lbl.set_xalign(0.0)
+                # Clean text to avoid broken markup
+                import html
+                clean_ann = html.escape(ann_text)
+                ann_lbl.set_markup(f"<span size='9500' color='#cbd5e1'>{clean_ann}</span>")
+                ann_card.append(ann_lbl)
+                self._sub_card_box.append(ann_card)
+
         self._sub_card_group.add(self._sub_card_box)
         self._sub_card_group.set_visible(True)
+
+        if not servers:
+            self._servers_group.set_visible(False)
+            dialog = Adw.MessageDialog(
+                transient_for=self,
+                heading="⚠️ Нет доступных серверов в подписке",
+                body="Подписка активна (лимит 5 GB), но провайдер Ghost VPN в данный момент не выдал рабочие узлы через API (все узлы имеют заглушки 0.0.0.0).\n\nПожалуйста, проверьте статус тарифа или используйте встроенные серверы Reality / Cloudflare WARP.",
+            )
+            dialog.add_response("ok", "Понятно")
+            dialog.present()
+            return False
 
         self._servers = servers
         self._rebuild_server_list()

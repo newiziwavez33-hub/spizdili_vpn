@@ -121,6 +121,32 @@ class SubscriptionParser:
                     except ValueError:
                         user_info[k_c] = v_c
 
+        # Parse profile-title
+        raw_title = resp.headers.get("Profile-Title") or resp.headers.get("profile-title") or ""
+        if raw_title.startswith("base64:"):
+            try:
+                user_info["profile_title"] = cls._try_b64decode(raw_title[7:])
+            except Exception:
+                user_info["profile_title"] = raw_title[7:]
+        elif raw_title:
+            user_info["profile_title"] = raw_title
+
+        # Parse announce header
+        raw_announce = resp.headers.get("Announce") or resp.headers.get("announce") or ""
+        if raw_announce.startswith("base64:"):
+            try:
+                user_info["announce"] = cls._try_b64decode(raw_announce[7:])
+            except Exception:
+                user_info["announce"] = raw_announce[7:]
+        elif raw_announce:
+            user_info["announce"] = raw_announce
+
+        # Parse support-url and web page
+        if resp.headers.get("Support-Url"):
+            user_info["support_url"] = resp.headers.get("Support-Url")
+        if resp.headers.get("Profile-Web-Page-Url"):
+            user_info["web_url"] = resp.headers.get("Profile-Web-Page-Url")
+
         return resp.text.strip(), user_info
 
     @classmethod
@@ -463,9 +489,8 @@ class SubscriptionParser:
             sni = reality.get("serverName") or tls.get("serverName") or addr
             pbk = reality.get("publicKey", "")
             sid = reality.get("shortId", "")
-            fp = reality.get("fingerprint") or tls.get("fingerprint") or "chrome"
-
-            if addr:
+            # Filter out dummy placeholder / ad banners (e.g. 0.0.0.0:1 or zeroed UUIDs)
+            if addr and addr not in ("0.0.0.0", "127.0.0.1", "::1") and uuid not in ("00000000-0000-0000-0000-000000000000", ""):
                 conf_lines = [
                     f"# Incy Profile: {name}",
                     f"# Endpoint: {addr}:{port}",
@@ -530,11 +555,14 @@ class SubscriptionParser:
 
         def commit_cur():
             if cur_proxy and "server" in cur_proxy and "name" in cur_proxy:
+                p_addr = str(cur_proxy.get("server", "")).strip()
+                p_uuid = str(cur_proxy.get("uuid", "") or cur_proxy.get("password", "")).strip()
+                if p_addr in ("0.0.0.0", "127.0.0.1", "::1") or p_uuid in ("00000000-0000-0000-0000-000000000000", ""):
+                    return
+
                 p_name = cls._sanitize_server_name(str(cur_proxy.get("name", default_name)))
-                p_addr = str(cur_proxy.get("server", ""))
                 p_port = int(cur_proxy.get("port", 443))
                 p_type = str(cur_proxy.get("type", "vless")).lower()
-                p_uuid = str(cur_proxy.get("uuid", "") or cur_proxy.get("password", ""))
                 p_sni = str(cur_proxy.get("sni", "") or cur_proxy.get("servername", "") or p_addr)
                 p_pbk = str(cur_proxy.get("public-key", "") or cur_proxy.get("pbk", ""))
                 p_sid = str(cur_proxy.get("short-id", "") or cur_proxy.get("sid", ""))

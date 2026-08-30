@@ -3414,11 +3414,6 @@ class MainWindow(Adw.ApplicationWindow):
             self._fetch_external_ip()
             self._fetch_ping()
             logger.info("Detected existing VPN connection on %s", iface)
-        elif self.settings.get("auto_connect", False):
-            last_profile = self.cfg.get_last_connected()
-            if last_profile and self.cfg.get_config(last_profile):
-                logger.info("Auto-connecting to last profile: %s", last_profile)
-                GLib.idle_add(lambda: self._do_connect(last_profile) or False)
 
         self._update_tray_state()
         return False
@@ -3809,9 +3804,12 @@ class SubscriptionImportDialog(Adw.Window):
     def _on_fetch_clicked(self, button: Gtk.Button) -> None:
         text = self._url_entry.get_text().strip()
         if not text:
+            if hasattr(self._parent, "_show_toast"):
+                self._parent._show_toast("Введите ссылку или ключ подписки")
             return
 
         self._fetch_btn.set_sensitive(False)
+        self._fetch_btn.set_label("⏳ Загрузка серверов…")
         self._spinner.set_visible(True)
         self._spinner.start()
 
@@ -3821,12 +3819,18 @@ class SubscriptionImportDialog(Adw.Window):
                 GLib.idle_add(self._on_fetch_done, servers, "")
             except Exception as exc:
                 logger.error("Subscription fetch error: %s", exc)
-                GLib.idle_add(self._on_fetch_done, [], str(exc))
+                err_msg = str(exc)
+                if "502" in err_msg or "Bad Gateway" in err_msg:
+                    err_msg = "Сервер подписки tgflow.me временно недоступен (502 Bad Gateway). Попробуйте через 1-2 минуты или вставьте прямой ключ vless:// / wireguard://."
+                elif "Connection refused" in err_msg or "NameResolutionError" in err_msg or "Failed to establish" in err_msg:
+                    err_msg = "Не удалось подключиться к серверу подписки. Проверьте интернет-соединение."
+                GLib.idle_add(self._on_fetch_done, [], err_msg)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_fetch_done(self, servers: list[ParsedServer], error: str) -> bool:
         self._fetch_btn.set_sensitive(True)
+        self._fetch_btn.set_label("⚡ Активировать и получить серверы")
         self._spinner.stop()
         self._spinner.set_visible(False)
 
@@ -3834,9 +3838,9 @@ class SubscriptionImportDialog(Adw.Window):
             dialog = Adw.MessageDialog(
                 transient_for=self,
                 heading="Ошибка загрузки подписки",
-                body=f"Не удалось получить данные с сервера подписки:\n{error}\n\nПроверьте подключение к сети или доступность ссылки.",
+                body=error,
             )
-            dialog.add_response("ok", "OK")
+            dialog.add_response("ok", "Понятно")
             dialog.present()
             return False
 

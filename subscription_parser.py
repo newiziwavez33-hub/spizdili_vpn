@@ -94,14 +94,34 @@ class ParsedServer:
 class SubscriptionParser:
     """Universal parser for VPN subscription links and configs."""
 
-    USER_AGENT = "Happ/3.0.0 Incy/2.0.0 v2rayN/6.23 UbuntuVPN/1.0"
+    USER_AGENT = "Incy/3.7.0 (Linux; x64)"
+
+    @classmethod
+    def _get_hardware_id(cls) -> str:
+        """Generate or read stable machine HWID matching Incy's device identification."""
+        try:
+            mid_path = Path("/etc/machine-id")
+            if mid_path.is_file():
+                raw = mid_path.read_text().strip()
+                if raw:
+                    import hashlib
+                    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+        except Exception:
+            pass
+        return "f9a2b8e3c1d4a5e6f7b8c9d0e1f2a3b4"
 
     @classmethod
     def fetch_url(cls, url: str, timeout: int = 15) -> tuple[str, dict[str, Any]]:
         """Fetch raw content and headers (subscription info/expiration) from a subscription URL."""
         url = cls._normalize_url(url)
+        hwid = cls._get_hardware_id()
         headers = {
             "User-Agent": cls.USER_AGENT,
+            "x-hwid": hwid,
+            "X-HWID": hwid,
+            "x-device-os": "Linux",
+            "x-device-model": "Linux x64",
+            "x-app-version": "3.7.0",
             "Accept": "*/*",
         }
         resp = requests.get(url, headers=headers, timeout=timeout, verify=False)
@@ -489,6 +509,9 @@ class SubscriptionParser:
             sni = reality.get("serverName") or tls.get("serverName") or addr
             pbk = reality.get("publicKey", "")
             sid = reality.get("shortId", "")
+            fp = reality.get("fingerprint") or tls.get("fingerprint") or "chrome"
+            flow = reality.get("flow", "") or (vnext[0].get("users", [{}])[0].get("flow", "") if vnext and isinstance(vnext, list) else "")
+
             # Filter out dummy placeholder / ad banners (e.g. 0.0.0.0:1 or zeroed UUIDs)
             if addr and addr not in ("0.0.0.0", "127.0.0.1", "::1") and uuid not in ("00000000-0000-0000-0000-000000000000", ""):
                 conf_lines = [
@@ -520,6 +543,7 @@ class SubscriptionParser:
                     "network": net,
                     "security": sec,
                     "fingerprint": fp,
+                    "flow": flow,
                 }
                 servers.append(ParsedServer(
                     name=name,
@@ -530,16 +554,25 @@ class SubscriptionParser:
                     metadata=meta,
                 ))
 
-        for key in ("servers", "configs", "profiles", "nodes", "outbounds"):
+        # If data is a complete Xray config with outbounds, find the primary proxy outbound
+        if "outbounds" in data and isinstance(data["outbounds"], list):
+            remarks = data.get("remarks") or default_name
+            # Look for proxy outbound
+            proxy_ob = next((ob for ob in data["outbounds"] if isinstance(ob, dict) and (ob.get("tag") == "proxy" or ob.get("protocol") in ("vless", "trojan", "shadowsocks", "vmess", "hysteria", "hysteria2"))), None)
+            if proxy_ob:
+                # Set remarks onto proxy_ob and parse it
+                proxy_ob["remarks"] = remarks
+                sub = cls._parse_json_config(proxy_ob, remarks)
+                if sub:
+                    return sub
+
+        for key in ("servers", "configs", "profiles", "nodes"):
             if key in data and isinstance(data[key], list):
                 for idx, item in enumerate(data[key]):
                     if isinstance(item, str):
                         res = cls.parse(item, f"{default_name}_{idx+1}")
                         servers.extend(res)
                     elif isinstance(item, dict):
-                        # Inherit parent remarks if item has no own remarks
-                        if "remarks" in data and "remarks" not in item:
-                            item["remarks"] = f"{data['remarks']}_{idx+1}" if idx > 0 else data["remarks"]
                         sub = cls._parse_json_config(item, f"{default_name}_{idx+1}")
                         servers.extend(sub)
 

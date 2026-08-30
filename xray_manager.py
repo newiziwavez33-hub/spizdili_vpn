@@ -101,7 +101,52 @@ class XrayManager:
             except Exception:
                 pass
 
-        # 2. Search candidate JSON databases
+        # 2. If .conf contains direct VLESS metadata, construct server_data directly!
+        if target_uuid and target_endpoint:
+            addr, _, port_str = target_endpoint.partition(":")
+            port = int(port_str) if port_str.isdigit() else 443
+            conf_lines = user_conf.read_text(encoding="utf-8").splitlines() if user_conf.is_file() else []
+            sni = addr
+            pbk = ""
+            sid = ""
+            flow = "xtls-rprx-vision"
+            fp = "firefox"
+            proto = "VLESS"
+            uri = ""
+            for l in conf_lines:
+                if l.startswith("# SNI:"):
+                    sni = l.split(":", 1)[1].strip()
+                elif l.startswith("# Reality PublicKey:"):
+                    pbk = l.split(":", 1)[1].strip()
+                elif l.startswith("# ShortID:"):
+                    sid = l.split(":", 1)[1].strip()
+                elif l.startswith("# Flow:"):
+                    flow = l.split(":", 1)[1].strip()
+                elif l.startswith("# Fingerprint:"):
+                    fp = l.split(":", 1)[1].strip()
+                elif l.startswith("# Protocol:"):
+                    proto = l.split(":", 1)[1].strip()
+                elif l.startswith("# URI:"):
+                    uri = l.split(":", 1)[1].strip()
+
+            return {
+                "name": target_name or profile_name,
+                "ascii_name": profile_name,
+                "protocol": proto,
+                "address": addr,
+                "port": port,
+                "uuid": target_uuid,
+                "public_key": pbk,
+                "sni": sni,
+                "short_id": sid,
+                "flow": flow,
+                "fingerprint": fp,
+                "security": "reality",
+                "network": "tcp",
+                "uri": uri,
+            }
+
+        # 3. Search candidate JSON databases
         for target_path in SERVER_JSON_CANDIDATES:
             if not target_path.is_file():
                 continue

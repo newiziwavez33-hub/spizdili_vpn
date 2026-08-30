@@ -1622,19 +1622,32 @@ class MainWindow(Adw.ApplicationWindow):
         self._profiles_group.set_header_suffix(header_box)
 
         # Interactive Search Entry for instant real-time filtering
-        # ── Primary Key Activation Banner ────────────────────────────────
-        key_group = Adw.PreferencesGroup(title="🔑 Активация серверов по ключу")
-        key_row = Adw.ActionRow(
-            title="Добавить ключ или ссылку подписки",
-            subtitle="Поддержка https:// (TgFlow, Marzban, Happ), vless://, wireguard://, awg://",
+        # ── Primary Key Activation Banner directly on the page ───────────
+        key_group = Adw.PreferencesGroup(
+            title="🔑 Активация серверов по ключу / подписке",
+            description="Вставьте ссылку подписки или ключ для мгновенной загрузки всех локаций",
         )
-        btn_key_act = Gtk.Button(label="Активировать")
+        self._page_key_entry = Adw.EntryRow(title="Ключ / Ссылка")
+        sub_url = self.settings.get("subscription_url", "")
+        if sub_url:
+            self._page_key_entry.set_text(sub_url)
+        
+        btn_key_act = Gtk.Button(label="⚡ Активировать")
         btn_key_act.add_css_class("suggested-action")
         btn_key_act.add_css_class("pill")
         btn_key_act.set_valign(Gtk.Align.CENTER)
-        btn_key_act.connect("clicked", self._on_import_link_clicked)
-        key_row.add_suffix(btn_key_act)
-        key_group.add(key_row)
+        
+        def _on_page_key_activate(b):
+            k = self._page_key_entry.get_text().strip()
+            if not k:
+                self._show_toast("Введите ссылку или ключ подписки")
+                return
+            self._on_import_link_clicked(b, initial_text=k)
+
+        btn_key_act.connect("clicked", _on_page_key_activate)
+        self._page_key_entry.connect("entry-activated", lambda _: _on_page_key_activate(btn_key_act))
+        self._page_key_entry.add_suffix(btn_key_act)
+        key_group.add(self._page_key_entry)
         inner.append(key_group)
 
         # ── Smart Features Banner (Speed & Diagnostics) ──────────────────
@@ -1657,10 +1670,10 @@ class MainWindow(Adw.ApplicationWindow):
 
         inner.append(self._profiles_group)
 
-        # Empty state
+        # Empty state with direct activate button
         self._profiles_empty = Adw.StatusPage(
             title="Серверы не активированы",
-            description="Введите ключ или ссылку на подписку для активации серверов",
+            description="Вставьте ключ или ссылку на подписку выше и нажмите «Активировать»",
             icon_name="dialog-password-symbolic",
         )
         self._profiles_empty.set_vexpand(True)
@@ -2839,10 +2852,10 @@ class MainWindow(Adw.ApplicationWindow):
             self._show_toast(f"Ошибка импорта: {exc}")
             logger.error("Import failed: %s", exc)
 
-    def _on_import_link_clicked(self, button: Gtk.Button) -> None:
+    def _on_import_link_clicked(self, button: Gtk.Button = None, initial_text: str = "") -> None:
         """Open subscription / link import dialog."""
         try:
-            dialog = SubscriptionImportDialog(parent=self, config_manager=self.cfg)
+            dialog = SubscriptionImportDialog(parent=self, config_manager=self.cfg, initial_text=initial_text)
             dialog.connect("imported", lambda d, n: self._refresh_profiles())
             dialog.present()
         except Exception as exc:
@@ -3661,9 +3674,9 @@ class SubscriptionImportDialog(Adw.Window):
         "imported": (GObject.SignalFlags.RUN_FIRST, None, (int,)),
     }
 
-    def __init__(self, parent: Gtk.Window, config_manager: ConfigManager, settings: Optional[Any] = None) -> None:
+    def __init__(self, parent: Gtk.Window, config_manager: ConfigManager, settings: Optional[Any] = None, initial_text: str = "") -> None:
         super().__init__(
-            title="Import Links & Subscriptions",
+            title="Активация подписки и ключей",
             default_width=520,
             default_height=640,
             modal=True,
@@ -3671,6 +3684,7 @@ class SubscriptionImportDialog(Adw.Window):
         )
         self._parent = parent
         self._cfg_mgr = config_manager
+        self._initial_text = initial_text
         if settings is None:
             from settings_manager import SettingsManager
             self._settings = SettingsManager()
@@ -3680,6 +3694,9 @@ class SubscriptionImportDialog(Adw.Window):
         self._check_buttons: list[Gtk.CheckButton] = []
         self._lat_labels: list[Gtk.Label] = []
         self._build_ui()
+
+        if self._initial_text:
+            GLib.timeout_add(100, lambda: self._on_fetch_clicked(self._fetch_btn) or False)
 
 
 
@@ -3720,7 +3737,7 @@ class SubscriptionImportDialog(Adw.Window):
             description="Вставьте ссылку https:// (TgFlow, Marzban, Happ), vless://, wireguard://, awg:// или base64",
         )
         self._url_entry = Adw.EntryRow(title="Ключ / Ссылка")
-        sub_url = self._settings.get("subscription_url", "")
+        sub_url = self._initial_text or self._settings.get("subscription_url", "")
         if sub_url:
             self._url_entry.set_text(sub_url)
         self._url_entry.connect("entry-activated", lambda _: self._on_fetch_clicked(self._fetch_btn))

@@ -97,7 +97,6 @@ class SubscriptionParser:
     USER_AGENT = "Happ/3.0.0 Incy/2.0.0 v2rayN/6.23 UbuntuVPN/1.0"
 
     @classmethod
-    @classmethod
     def fetch_url(cls, url: str, timeout: int = 15) -> tuple[str, dict[str, Any]]:
         """Fetch raw content and headers (subscription info/expiration) from a subscription URL."""
         url = cls._normalize_url(url)
@@ -176,7 +175,8 @@ class SubscriptionParser:
                     s.metadata["subscription_info"] = user_info
                 return servers
             except Exception as exc:
-                logger.warning("URL fetch failed, trying direct parse: %s", exc)
+                logger.error("URL fetch failed: %s", exc)
+                raise RuntimeError(f"Ошибка запроса к серверу подписки ({exc})")
 
         # 2. Try Base64 decoding
         if not input_data.startswith("[Interface]") and not input_data.startswith("wireguard://") and not input_data.startswith("awg://"):

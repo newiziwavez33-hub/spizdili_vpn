@@ -188,15 +188,34 @@ class SubscriptionParser:
             except Exception:
                 pass
 
-        # 3. Try parsing JSON format (e.g. Happ/Incy/Amnezia config JSON or Sing-box/Xray export)
-        if input_data.startswith("{") and input_data.endswith("}"):
+        # 3. Try parsing JSON format (e.g. Happ/Incy/Ghost VPN / Amnezia config JSON or Sing-box/Xray export array/dict)
+        if (input_data.startswith("{") and input_data.endswith("}")) or (input_data.startswith("[") and input_data.endswith("]")):
             try:
                 data = json.loads(input_data)
-                servers = cls._parse_json_config(data, default_name_prefix)
+                if isinstance(data, list):
+                    servers: list[ParsedServer] = []
+                    for idx, item in enumerate(data):
+                        if isinstance(item, dict):
+                            servers.extend(cls._parse_json_config(item, f"{default_name_prefix}_{idx+1}"))
+                        elif isinstance(item, str):
+                            servers.extend(cls.parse(item, f"{default_name_prefix}_{idx+1}"))
+                    if servers:
+                        return servers
+                elif isinstance(data, dict):
+                    servers = cls._parse_json_config(data, default_name_prefix)
+                    if servers:
+                        return servers
+            except Exception as exc:
+                logger.debug("JSON parse attempt: %s", exc)
+
+        # 3.1. Try parsing Clash / Mihomo YAML format (e.g. proxies list)
+        if "proxies:" in input_data or "proxy-groups:" in input_data:
+            try:
+                servers = cls._parse_clash_yaml(input_data, default_name_prefix)
                 if servers:
                     return servers
             except Exception as exc:
-                logger.debug("JSON parse attempt: %s", exc)
+                logger.debug("Clash YAML parse attempt: %s", exc)
 
         # 4. Multi-line list of URIs or multiple [Interface] blocks
         servers: list[ParsedServer] = []
@@ -411,6 +430,81 @@ class SubscriptionParser:
             if srv:
                 servers.append(srv)
 
+        # Single outbound or config with tag/protocol
+        if "protocol" in data:
+            proto = data.get("protocol", "").lower()
+            tag = data.get("remarks") or data.get("tag") or default_name
+            name = cls._sanitize_server_name(tag)
+            settings = data.get("settings", {})
+            stream = data.get("streamSettings", {})
+            vnext = settings.get("vnext", [])
+            servers_list = settings.get("servers", [])
+
+            addr = ""
+            port = 443
+            uuid = ""
+            if vnext and isinstance(vnext, list):
+                v_first = vnext[0]
+                addr = v_first.get("address", "")
+                port = int(v_first.get("port", 443))
+                users = v_first.get("users", [])
+                if users:
+                    uuid = users[0].get("id", "")
+            elif servers_list and isinstance(servers_list, list):
+                s_first = servers_list[0]
+                addr = s_first.get("address", "")
+                port = int(s_first.get("port", 443))
+                uuid = s_first.get("password", "") or s_first.get("id", "")
+
+            sec = stream.get("security", "none")
+            net = stream.get("network", "tcp")
+            reality = stream.get("realitySettings", {})
+            tls = stream.get("tlsSettings", {})
+            sni = reality.get("serverName") or tls.get("serverName") or addr
+            pbk = reality.get("publicKey", "")
+            sid = reality.get("shortId", "")
+            fp = reality.get("fingerprint") or tls.get("fingerprint") or "chrome"
+
+            if addr:
+                conf_lines = [
+                    f"# Incy Profile: {name}",
+                    f"# Endpoint: {addr}:{port}",
+                    f"# UUID: {uuid}",
+                    f"# Protocol: {proto.upper()} ({sec.upper()})",
+                    "[Interface]",
+                    "PrivateKey = none",
+                    "Address = 10.0.0.2/32",
+                    "DNS = 1.1.1.1, 8.8.8.8",
+                    "",
+                    "[Peer]",
+                    "PublicKey = none",
+                    f"Endpoint = {addr}:{port}",
+                    "AllowedIPs = 0.0.0.0/0, ::/0",
+                ]
+                meta = {
+                    "id": f"sub_json_{abs(hash(str(data))) % 1000000}",
+                    "name": name,
+                    "ascii_name": name,
+                    "protocol": proto,
+                    "address": addr,
+                    "port": port,
+                    "uuid": uuid,
+                    "public_key": pbk,
+                    "short_id": sid,
+                    "sni": sni,
+                    "network": net,
+                    "security": sec,
+                    "fingerprint": fp,
+                }
+                servers.append(ParsedServer(
+                    name=name,
+                    protocol=f"{proto.upper()} {sec.capitalize()}" if sec != "none" else proto.upper(),
+                    conf_content="\n".join(conf_lines) + "\n",
+                    endpoint=f"{addr}:{port}",
+                    dns="1.1.1.1, 8.8.8.8",
+                    metadata=meta,
+                ))
+
         for key in ("servers", "configs", "profiles", "nodes", "outbounds"):
             if key in data and isinstance(data[key], list):
                 for idx, item in enumerate(data[key]):
@@ -418,9 +512,99 @@ class SubscriptionParser:
                         res = cls.parse(item, f"{default_name}_{idx+1}")
                         servers.extend(res)
                     elif isinstance(item, dict):
+                        # Inherit parent remarks if item has no own remarks
+                        if "remarks" in data and "remarks" not in item:
+                            item["remarks"] = f"{data['remarks']}_{idx+1}" if idx > 0 else data["remarks"]
                         sub = cls._parse_json_config(item, f"{default_name}_{idx+1}")
                         servers.extend(sub)
 
+        return servers
+
+    @classmethod
+    def _parse_clash_yaml(cls, yaml_text: str, default_name: str) -> list[ParsedServer]:
+        """Parse Clash / Mihomo YAML proxies list."""
+        servers: list[ParsedServer] = []
+        lines = yaml_text.splitlines()
+        in_proxies = False
+        cur_proxy: dict[str, Any] = {}
+
+        def commit_cur():
+            if cur_proxy and "server" in cur_proxy and "name" in cur_proxy:
+                p_name = cls._sanitize_server_name(str(cur_proxy.get("name", default_name)))
+                p_addr = str(cur_proxy.get("server", ""))
+                p_port = int(cur_proxy.get("port", 443))
+                p_type = str(cur_proxy.get("type", "vless")).lower()
+                p_uuid = str(cur_proxy.get("uuid", "") or cur_proxy.get("password", ""))
+                p_sni = str(cur_proxy.get("sni", "") or cur_proxy.get("servername", "") or p_addr)
+                p_pbk = str(cur_proxy.get("public-key", "") or cur_proxy.get("pbk", ""))
+                p_sid = str(cur_proxy.get("short-id", "") or cur_proxy.get("sid", ""))
+                p_net = str(cur_proxy.get("network", "tcp"))
+                p_sec = "reality" if p_pbk else ("tls" if cur_proxy.get("tls") else "none")
+
+                conf_lines = [
+                    f"# Incy Profile: {p_name}",
+                    f"# Endpoint: {p_addr}:{p_port}",
+                    f"# UUID: {p_uuid}",
+                    f"# Protocol: {p_type.upper()} ({p_sec.upper()})",
+                    "[Interface]",
+                    "PrivateKey = none",
+                    "Address = 10.0.0.2/32",
+                    "DNS = 1.1.1.1, 8.8.8.8",
+                    "",
+                    "[Peer]",
+                    "PublicKey = none",
+                    f"Endpoint = {p_addr}:{p_port}",
+                    "AllowedIPs = 0.0.0.0/0, ::/0",
+                ]
+                meta = {
+                    "id": f"sub_clash_{abs(hash(p_name + p_addr)) % 1000000}",
+                    "name": p_name,
+                    "ascii_name": p_name,
+                    "protocol": p_type,
+                    "address": p_addr,
+                    "port": p_port,
+                    "uuid": p_uuid,
+                    "public_key": p_pbk,
+                    "short_id": p_sid,
+                    "sni": p_sni,
+                    "network": p_net,
+                    "security": p_sec,
+                }
+                servers.append(ParsedServer(
+                    name=p_name,
+                    protocol=f"{p_type.upper()} {p_sec.capitalize()}" if p_sec != "none" else p_type.upper(),
+                    conf_content="\n".join(conf_lines) + "\n",
+                    endpoint=f"{p_addr}:{p_port}",
+                    dns="1.1.1.1, 8.8.8.8",
+                    metadata=meta,
+                ))
+
+        for raw_line in lines:
+            line = raw_line.rstrip()
+            if not line or line.strip().startswith("#"):
+                continue
+            if line.startswith("proxies:"):
+                in_proxies = True
+                continue
+            if in_proxies and not line.startswith(" ") and not line.startswith("\t") and not line.startswith("-"):
+                in_proxies = False
+                commit_cur()
+                cur_proxy = {}
+                continue
+
+            if in_proxies:
+                stripped = line.strip()
+                if stripped.startswith("-"):
+                    commit_cur()
+                    cur_proxy = {}
+                    stripped = stripped[1:].strip()
+                if ":" in stripped:
+                    k, _, v = stripped.partition(":")
+                    k_c = k.strip().lower()
+                    v_c = v.strip().strip('"').strip("'")
+                    cur_proxy[k_c] = v_c
+
+        commit_cur()
         return servers
 
     @classmethod

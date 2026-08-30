@@ -1100,18 +1100,12 @@ class MainWindow(Adw.ApplicationWindow):
         quick_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, halign=Gtk.Align.CENTER)
         quick_actions_box.set_margin_top(8)
 
-        self._dash_warp_btn = Gtk.Button(label="🛡️ Личный WARP")
-        self._dash_warp_btn.add_css_class("suggested-action")
-        self._dash_warp_btn.add_css_class("pill")
-        self._dash_warp_btn.set_tooltip_text("Создать личный бесплатный WireGuard сервер Cloudflare в 1 клик")
-        self._dash_warp_btn.connect("clicked", self._on_create_personal_warp_clicked)
-        quick_actions_box.append(self._dash_warp_btn)
-
-        self._dash_harv_btn = Gtk.Button(label="🔄 Свежие сервера")
-        self._dash_harv_btn.add_css_class("pill")
-        self._dash_harv_btn.set_tooltip_text("Скачать свежие рабочие VLESS Reality серверы из сети")
-        self._dash_harv_btn.connect("clicked", self._on_fetch_cloud_servers_clicked)
-        quick_actions_box.append(self._dash_harv_btn)
+        self._dash_key_btn = Gtk.Button(label="🔑 Активировать ключ")
+        self._dash_key_btn.add_css_class("suggested-action")
+        self._dash_key_btn.add_css_class("pill")
+        self._dash_key_btn.set_tooltip_text("Добавить ссылку на подписку или ключ серверов")
+        self._dash_key_btn.connect("clicked", self._on_import_link_clicked)
+        quick_actions_box.append(self._dash_key_btn)
 
         self._dash_speed_btn = Gtk.Button(label="🚀 Тест скорости")
         self._dash_speed_btn.add_css_class("pill")
@@ -1628,24 +1622,23 @@ class MainWindow(Adw.ApplicationWindow):
         self._profiles_group.set_header_suffix(header_box)
 
         # Interactive Search Entry for instant real-time filtering
-        # ── Smart Features Banner (WARP / Harvest / Speed) ───────────────
-        smart_group = Adw.PreferencesGroup(title="Умные функции v1.2.7")
+        # ── Primary Key Activation Banner ────────────────────────────────
+        key_group = Adw.PreferencesGroup(title="🔑 Активация серверов по ключу")
+        key_row = Adw.ActionRow(
+            title="Добавить ключ или ссылку подписки",
+            subtitle="Поддержка https:// (TgFlow, Marzban, Happ), vless://, wireguard://, awg://",
+        )
+        btn_key_act = Gtk.Button(label="Активировать")
+        btn_key_act.add_css_class("suggested-action")
+        btn_key_act.add_css_class("pill")
+        btn_key_act.set_valign(Gtk.Align.CENTER)
+        btn_key_act.connect("clicked", self._on_import_link_clicked)
+        key_row.add_suffix(btn_key_act)
+        key_group.add(key_row)
+        inner.append(key_group)
 
-        warp_row = Adw.ActionRow(title="🛡️ Личный Cloudflare WARP", subtitle="Бесплатный персональный гигабитный сервер без ограничений")
-        self._btn_warp_create = Gtk.Button(label="Создать")
-        self._btn_warp_create.add_css_class("suggested-action")
-        self._btn_warp_create.set_valign(Gtk.Align.CENTER)
-        self._btn_warp_create.connect("clicked", self._on_create_personal_warp_clicked)
-        warp_row.add_suffix(self._btn_warp_create)
-        smart_group.add(warp_row)
-
-        harv_row = Adw.ActionRow(title="🔄 Свежие сервера из сети", subtitle="Авто-поиск и добавление рабочих VLESS Reality серверов")
-        btn_harv_fetch = Gtk.Button(label="Обновить")
-        btn_harv_fetch.add_css_class("pill")
-        btn_harv_fetch.set_valign(Gtk.Align.CENTER)
-        btn_harv_fetch.connect("clicked", self._on_fetch_cloud_servers_clicked)
-        harv_row.add_suffix(btn_harv_fetch)
-        smart_group.add(harv_row)
+        # ── Smart Features Banner (Speed & Diagnostics) ──────────────────
+        smart_group = Adw.PreferencesGroup(title="Инструменты")
 
         speed_row = Adw.ActionRow(title="🚀 Тест скорости загрузки", subtitle="Замер реальной пропускной способности туннеля (Мбит/с)")
         self._speed_btn = Gtk.Button(label="Замерить")
@@ -1666,9 +1659,9 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Empty state
         self._profiles_empty = Adw.StatusPage(
-            title="Нет серверов",
-            description="Импортируйте файл .conf или обновите каталог в настройках",
-            icon_name="document-new-symbolic",
+            title="Серверы не активированы",
+            description="Введите ключ или ссылку на подписку для активации серверов",
+            icon_name="dialog-password-symbolic",
         )
         self._profiles_empty.set_vexpand(True)
         inner.append(self._profiles_empty)
@@ -3822,8 +3815,8 @@ class SubscriptionImportDialog(Adw.Window):
         if error:
             dialog = Adw.MessageDialog(
                 transient_for=self,
-                heading="Fetch Failed",
-                body=f"Could not load or parse servers:\n{error}",
+                heading="Ошибка загрузки подписки",
+                body=f"Не удалось получить данные с сервера подписки:\n{error}\n\nПроверьте подключение к сети или доступность ссылки.",
             )
             dialog.add_response("ok", "OK")
             dialog.present()
@@ -3832,12 +3825,55 @@ class SubscriptionImportDialog(Adw.Window):
         if not servers:
             dialog = Adw.MessageDialog(
                 transient_for=self,
-                heading="No Servers Found",
-                body="No valid WireGuard or AmneziaWG servers were found in the provided input.",
+                heading="Серверы не найдены",
+                body="В предоставленной подписке или ключе не найдено доступных серверов (VLESS, WireGuard, AmneziaWG).",
             )
             dialog.add_response("ok", "OK")
             dialog.present()
             return False
+
+        # Extract and format subscription expiry / remaining time if present
+        sub_info = None
+        for s in servers:
+            if s.metadata and s.metadata.get("subscription_info"):
+                sub_info = s.metadata["subscription_info"]
+                break
+
+        if sub_info:
+            expire_ts = sub_info.get("expire")
+            upload_b = sub_info.get("upload", 0)
+            download_b = sub_info.get("download", 0)
+            total_b = sub_info.get("total", 0)
+
+            details = []
+            if expire_ts:
+                try:
+                    import datetime
+                    exp_dt = datetime.datetime.fromtimestamp(int(expire_ts))
+                    now_dt = datetime.datetime.now()
+                    diff = exp_dt - now_dt
+                    days_left = diff.days
+                    if days_left > 0:
+                        time_str = f"{days_left} дн. ({exp_dt.strftime('%d.%m.%Y')})"
+                    elif diff.total_seconds() > 0:
+                        time_str = f"Менее суток ({exp_dt.strftime('%d.%m.%Y %H:%M')})"
+                    else:
+                        time_str = f"Истекла ({exp_dt.strftime('%d.%m.%Y')})"
+                    details.append(f"⏳ Срок действия: <b>{time_str}</b>")
+                except Exception:
+                    pass
+
+            if total_b and isinstance(total_b, int):
+                used_gb = (upload_b + download_b) / (1024**3)
+                tot_gb = total_b / (1024**3)
+                details.append(f"📊 Трафик: <b>{used_gb:.1f} GB</b> / <b>{tot_gb:.1f} GB</b>")
+
+            if details:
+                self._servers_group.set_description(" • ".join(details))
+            else:
+                self._servers_group.set_description(f"Успешно загружено {len(servers)} серверов")
+        else:
+            self._servers_group.set_description(f"Успешно загружено {len(servers)} серверов")
 
         self._servers = servers
         self._rebuild_server_list()
@@ -3939,6 +3975,8 @@ class SubscriptionImportDialog(Adw.Window):
 
         import tempfile
         imported_count = 0
+        proxy_meta_list = []
+
         for srv in selected_servers:
             try:
                 base = srv.name[:12]
@@ -3953,8 +3991,26 @@ class SubscriptionImportDialog(Adw.Window):
                 self._cfg_mgr.import_config(tmp)
                 tmp.unlink(missing_ok=True)
                 imported_count += 1
+
+                if srv.metadata:
+                    m = dict(srv.metadata)
+                    m["name"] = name
+                    m["ascii_name"] = name
+                    proxy_meta_list.append(m)
             except Exception as exc:
                 logger.error("Failed to import server '%s': %s", srv.name, exc)
+
+        if proxy_meta_list:
+            try:
+                from reality_fetcher import save_servers_to_system
+                save_servers_to_system(proxy_meta_list)
+            except Exception as exc:
+                logger.warning("Could not sync metadata to wavez_servers.json: %s", exc)
+
+        # Save active subscription URL
+        sub_input = self._url_entry.get_text().strip()
+        if sub_input.startswith("http://") or sub_input.startswith("https://") or sub_input.startswith("happ://"):
+            self._settings.set("subscription_url", sub_input)
 
         self.emit("imported", imported_count)
         self.close()

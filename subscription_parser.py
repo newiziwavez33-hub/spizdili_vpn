@@ -97,8 +97,9 @@ class SubscriptionParser:
     USER_AGENT = "Happ/3.0.0 Incy/2.0.0 v2rayN/6.23 UbuntuVPN/1.0"
 
     @classmethod
-    def fetch_url(cls, url: str, timeout: int = 15) -> str:
-        """Fetch raw content from a subscription URL."""
+    @classmethod
+    def fetch_url(cls, url: str, timeout: int = 15) -> tuple[str, dict[str, Any]]:
+        """Fetch raw content and headers (subscription info/expiration) from a subscription URL."""
         url = cls._normalize_url(url)
         headers = {
             "User-Agent": cls.USER_AGENT,
@@ -106,7 +107,22 @@ class SubscriptionParser:
         }
         resp = requests.get(url, headers=headers, timeout=timeout, verify=False)
         resp.raise_for_status()
-        return resp.text.strip()
+
+        # Parse Subscription-Userinfo header (e.g. upload=...; download=...; total=...; expire=...)
+        user_info: dict[str, Any] = {}
+        sub_hdr = resp.headers.get("Subscription-Userinfo") or resp.headers.get("subscription-userinfo") or ""
+        if sub_hdr:
+            for part in sub_hdr.split(";"):
+                if "=" in part:
+                    k, _, v = part.partition("=")
+                    k_c = k.strip().lower()
+                    v_c = v.strip()
+                    try:
+                        user_info[k_c] = int(v_c)
+                    except ValueError:
+                        user_info[k_c] = v_c
+
+        return resp.text.strip(), user_info
 
     @classmethod
     def _normalize_url(cls, raw_url: str) -> str:
@@ -153,9 +169,12 @@ class SubscriptionParser:
         if input_data.startswith("http://") or input_data.startswith("https://") or \
            input_data.startswith("happ://") or input_data.startswith("incy://"):
             try:
-                fetched = cls.fetch_url(input_data)
-                logger.info("Fetched %d bytes from subscription URL", len(fetched))
-                return cls.parse(fetched, default_name_prefix=cls._extract_host_name(input_data))
+                fetched, user_info = cls.fetch_url(input_data)
+                logger.info("Fetched %d bytes from subscription URL (User-Info: %s)", len(fetched), user_info)
+                servers = cls.parse(fetched, default_name_prefix=cls._extract_host_name(input_data))
+                for s in servers:
+                    s.metadata["subscription_info"] = user_info
+                return servers
             except Exception as exc:
                 logger.warning("URL fetch failed, trying direct parse: %s", exc)
 
@@ -211,6 +230,14 @@ class SubscriptionParser:
 
             if line.startswith("wireguard://") or line.startswith("awg://"):
                 srv = cls._parse_wg_uri(line, f"{default_name_prefix}_{idx+1}")
+                if srv:
+                    servers.append(srv)
+            elif line.startswith("vless://"):
+                srv = cls._parse_vless_uri(line, f"{default_name_prefix}_{idx+1}")
+                if srv:
+                    servers.append(srv)
+            elif line.startswith("trojan://") or line.startswith("ss://") or line.startswith("vmess://"):
+                srv = cls._parse_generic_proxy_uri(line, f"{default_name_prefix}_{idx+1}")
                 if srv:
                     servers.append(srv)
             elif line.startswith("[Interface]"):
@@ -395,6 +422,110 @@ class SubscriptionParser:
                         servers.extend(sub)
 
         return servers
+
+    @classmethod
+    def _parse_vless_uri(cls, uri: str, default_name: str) -> Optional[ParsedServer]:
+        """Parse vless:// URI with Reality or TLS into ParsedServer."""
+        try:
+            u = urllib.parse.urlparse(uri)
+            qs = urllib.parse.parse_qs(u.query)
+            addr = u.hostname or ""
+            port = u.port or 443
+            uuid = u.username or ""
+            pbk = qs.get("pbk", [""])[0]
+            sid = qs.get("sid", [""])[0]
+            sni = qs.get("sni", [addr])[0]
+            flow = qs.get("flow", [""])[0]
+            net = qs.get("type", ["tcp"])[0]
+            sec = qs.get("security", ["reality"])[0]
+            fp = qs.get("fp", ["chrome"])[0]
+
+            frag_name = urllib.parse.unquote(u.fragment).strip()
+            name = frag_name if frag_name else default_name
+            name = cls._sanitize_server_name(name)
+
+            # Build synthetic .conf header so XrayManager can map it directly
+            conf_lines = [
+                f"# Incy Profile: {name}",
+                f"# Endpoint: {addr}:{port}",
+                f"# UUID: {uuid}",
+                f"# Protocol: VLESS ({sec.upper()})",
+                "[Interface]",
+                "PrivateKey = none",
+                "Address = 10.0.0.2/32",
+                "DNS = 1.1.1.1, 8.8.8.8",
+                "",
+                "[Peer]",
+                "PublicKey = none",
+                f"Endpoint = {addr}:{port}",
+                "AllowedIPs = 0.0.0.0/0, ::/0",
+            ]
+
+            meta = {
+                "id": f"sub_vless_{abs(hash(uri)) % 1000000}",
+                "name": name,
+                "ascii_name": name,
+                "protocol": "vless",
+                "address": addr,
+                "port": port,
+                "uuid": uuid,
+                "public_key": pbk,
+                "short_id": sid,
+                "sni": sni,
+                "flow": flow,
+                "network": net,
+                "security": sec,
+                "fingerprint": fp,
+                "uri": uri,
+            }
+
+            return ParsedServer(
+                name=name,
+                protocol="VLESS Reality" if sec == "reality" else "VLESS",
+                conf_content="\n".join(conf_lines) + "\n",
+                endpoint=f"{addr}:{port}",
+                dns="1.1.1.1, 8.8.8.8",
+                metadata=meta,
+            )
+        except Exception as exc:
+            logger.error("Failed to parse VLESS URI %s: %s", uri[:50], exc)
+            return None
+
+    @classmethod
+    def _parse_generic_proxy_uri(cls, uri: str, default_name: str) -> Optional[ParsedServer]:
+        """Parse trojan://, ss://, vmess:// URI into ParsedServer."""
+        try:
+            u = urllib.parse.urlparse(uri)
+            addr = u.hostname or ""
+            port = u.port or 443
+            frag_name = urllib.parse.unquote(u.fragment).strip()
+            name = frag_name if frag_name else default_name
+            name = cls._sanitize_server_name(name)
+
+            conf_lines = [
+                f"# Incy Profile: {name}",
+                f"# Endpoint: {addr}:{port}",
+                f"# Protocol: {u.scheme.upper()}",
+                "[Interface]",
+                "PrivateKey = none",
+                "Address = 10.0.0.2/32",
+                "DNS = 1.1.1.1, 8.8.8.8",
+                "",
+                "[Peer]",
+                "PublicKey = none",
+                f"Endpoint = {addr}:{port}",
+                "AllowedIPs = 0.0.0.0/0, ::/0",
+            ]
+            return ParsedServer(
+                name=name,
+                protocol=u.scheme.upper(),
+                conf_content="\n".join(conf_lines) + "\n",
+                endpoint=f"{addr}:{port}",
+                dns="1.1.1.1, 8.8.8.8",
+            )
+        except Exception as exc:
+            logger.error("Failed to parse proxy URI %s: %s", uri[:50], exc)
+            return None
 
     _COUNTRY_TRANSLATIONS = (
         ("Нидерланды", "Netherlands"),
